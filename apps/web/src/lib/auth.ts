@@ -16,6 +16,43 @@ export const fullAuthConfig = {
 	callbacks: {
 		...authConfig.callbacks,
 
+		async jwt(
+			params: Parameters<NonNullable<NextAuthConfig["callbacks"]>["jwt"]>[0],
+		) {
+			const previousRefreshToken = (params.token as Record<string, unknown>)
+				.refreshToken as string | undefined;
+
+			// Delegate to base callback (handles sign-in capture + Spotify token refresh)
+			const token = (await authConfig.callbacks.jwt(params)) as Record<
+				string,
+				unknown
+			>;
+
+			// If refresh token was rotated, persist to D1 so the cron worker stays current
+			if (
+				token.refreshToken &&
+				token.refreshToken !== previousRefreshToken &&
+				token.spotifyId
+			) {
+				try {
+					const encryptionKey = getEncryptionKey();
+					const encryptedToken = encrypt(
+						token.refreshToken as string,
+						encryptionKey,
+					);
+					await queryD1(
+						"UPDATE users SET encrypted_refresh_token = ?, updated_at = datetime('now') WHERE spotify_user_id = ?",
+						[encryptedToken, token.spotifyId],
+					);
+					console.log("[Auth] Rotated refresh token persisted to D1");
+				} catch (error) {
+					console.error("[Auth] Failed to persist rotated token:", error);
+				}
+			}
+
+			return token;
+		},
+
 		async signIn({ profile, account }) {
 			// Single-user gate: only allow this Spotify account
 			if (profile?.id !== "evancnavarro") {

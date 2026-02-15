@@ -45,6 +45,32 @@ export interface SpotifyPlaylist {
 // Theme extraction types
 // ──────────────────────────────────────────────
 
+export interface TieredObject {
+	object: string;
+	tier: "high" | "medium" | "low";
+	reasoning: string;
+}
+
+export interface TrackExtraction {
+	trackName: string;
+	artist: string;
+	lyricsFound: boolean;
+	objects: TieredObject[];
+}
+
+export interface ConvergenceCandidate {
+	object: string;
+	aestheticContext: string;
+	reasoning: string;
+	rank: number;
+}
+
+export interface ConvergenceResult {
+	candidates: ConvergenceCandidate[];
+	selectedIndex: number;
+	collisionNotes: string;
+}
+
 export interface ExtractedObject {
 	object: string;
 	reasoning: string;
@@ -104,12 +130,34 @@ export interface DbGeneration {
 	symbolic_object: string;
 	dall_e_prompt: string;
 	image_url: string | null;
+	replicate_prediction_id: string | null;
+	r2_key: string | null;
+	analysis_id: string | null;
+	claimed_object_id: string | null;
 	status: GenerationStatus;
 	error_message: string | null;
 	duration_ms: number | null;
 	cost_usd: number | null;
-	trigger: GenerationTrigger;
+	trigger_type: GenerationTrigger;
 	created_at: string;
+}
+
+export interface DbStyle {
+	id: string;
+	user_id: string;
+	name: string;
+	description: string | null;
+	replicate_model: string;
+	lora_url: string | null;
+	lora_scale: number;
+	prompt_template: string;
+	negative_prompt: string | null;
+	guidance_scale: number;
+	num_inference_steps: number;
+	seed: number | null;
+	is_default: number;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface DbJob {
@@ -124,6 +172,44 @@ export interface DbJob {
 	started_at: string;
 	completed_at: string | null;
 	created_at: string;
+}
+
+export interface DbPlaylistAnalysis {
+	id: string;
+	user_id: string;
+	playlist_id: string;
+	track_snapshot: string;
+	track_extractions: string;
+	convergence_result: string;
+	chosen_object: string;
+	aesthetic_context: string;
+	style_id: string;
+	tracks_added: string | null;
+	tracks_removed: string | null;
+	outlier_count: number;
+	outlier_threshold: number;
+	regeneration_triggered: number;
+	status: "completed" | "partial";
+	trigger_type: GenerationTrigger;
+	created_at: string;
+}
+
+export interface DbClaimedObject {
+	id: string;
+	user_id: string;
+	playlist_id: string;
+	object_name: string;
+	aesthetic_context: string | null;
+	source_generation_id: string | null;
+	superseded_at: string | null;
+	created_at: string;
+}
+
+export interface GenerationResult {
+	success: boolean;
+	generationId?: string;
+	error?: string;
+	cost?: string;
 }
 
 // ──────────────────────────────────────────────
@@ -155,10 +241,18 @@ export type JobStatus = "pending" | "processing" | "completed" | "failed";
 
 export const CONFIG = {
 	LYRICS_TIMEOUT_MS: 5_000,
+	LYRICS_CONCURRENCY: 5,
+	LYRICS_TRUNCATE_CHARS: 800,
 	PLAYLIST_TIMEOUT_MS: 5 * 60 * 1_000,
 	OPENAI_RETRY_ATTEMPTS: 3,
 	SPOTIFY_RETRY_ATTEMPTS: 3,
 	MAX_TRACKS_PER_PLAYLIST: 20,
 	SPOTIFY_IMAGE_MAX_BYTES: 256 * 1_024,
 	JPEG_QUALITY: 40,
+	IMAGE_MAX_BYTES: 192 * 1_024,
+	IMAGE_DIMENSIONS: 640,
+	REPLICATE_POLL_INTERVAL_MS: 1_000,
+	REPLICATE_TIMEOUT_MS: 120_000,
+	/** Minimum outlier fraction to trigger full re-analysis (for 4+ tracks) */
+	REGEN_THRESHOLD_DEFAULT: 0.25,
 } as const;

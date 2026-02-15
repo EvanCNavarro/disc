@@ -10,22 +10,20 @@ database_name = "disc-db"
 database_id = "f3e9b7fb-50c1-45c9-be51-eeef3bcc07a2"
 
 # R2 Bucket (image archive)
-# [[r2_buckets]]
-# binding = "IMAGES"
-# bucket_name = "disc-images"
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "disc-images"
 
-# Cron triggers (Phase 4)
-# [triggers]
-# crons = ["0 * * * *"]
+# Cron triggers — runs every hour, handler filters by user cron_time
+[triggers]
+crons = ["0 * * * *"]
 
-# Queue bindings (Phase 4)
-# [[queues.producers]]
-# queue = "disc-generate"
-# binding = "GENERATE_QUEUE"
-#
-# [[queues.consumers]]
-# queue = "disc-generate"
-# max_batch_size = 1
+# Secrets (set via: wrangler secret put <KEY> --config workers/cron/wrangler.toml)
+# - REPLICATE_API_TOKEN
+# - OPENAI_API_KEY
+# - ENCRYPTION_KEY
+# - SPOTIFY_CLIENT_ID
+# - SPOTIFY_CLIENT_SECRET
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"

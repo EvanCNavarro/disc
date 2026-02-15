@@ -9,8 +9,7 @@
 	},
 	"dependencies": {
 		"@cf-wasm/photon": "^0.1.31",
-		"@disc/shared": "*",
-		"hono": "^4.10.4"
+		"@disc/shared": "*"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251014.0",
