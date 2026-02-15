@@ -25,7 +25,7 @@ export const fullAuthConfig = {
 				.refreshToken as string | undefined;
 
 			// Delegate to base callback (handles sign-in capture + Spotify token refresh)
-			const token = (await authConfig.callbacks.jwt!(params)) as Record<
+			const token = (await authConfig.callbacks.jwt?.(params)) as Record<
 				string,
 				unknown
 			>;
