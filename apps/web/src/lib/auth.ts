@@ -17,13 +17,15 @@ export const fullAuthConfig = {
 		...authConfig.callbacks,
 
 		async jwt(
-			params: Parameters<NonNullable<NextAuthConfig["callbacks"]>["jwt"]>[0],
+			params: Parameters<
+				NonNullable<NonNullable<NextAuthConfig["callbacks"]>["jwt"]>
+			>[0],
 		) {
 			const previousRefreshToken = (params.token as Record<string, unknown>)
 				.refreshToken as string | undefined;
 
 			// Delegate to base callback (handles sign-in capture + Spotify token refresh)
-			const token = (await authConfig.callbacks.jwt(params)) as Record<
+			const token = (await authConfig.callbacks.jwt!(params)) as Record<
 				string,
 				unknown
 			>;
