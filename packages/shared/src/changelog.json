@@ -1,0 +1,304 @@
+{
+	"versions": [
+		{
+			"version": "0.5.0",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Changelog page at /changelog with search, fuzzy word matching, and highlighted results"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "What's New nav link in NavDock for quick changelog access"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "5 new art styles: Neon Noir, Soft Watercolor, Brutalist Collage, Chromatic Glass, Ukiyo-e Wave"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Structured changelog.json with types, utilities, and version-bump.sh integration"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Production deployment: disc.400.dev live with Spotify OAuth, TLS, and all worker secrets"
+				},
+				{
+					"type": "fix",
+					"scope": "auth",
+					"message": "Fix Vercel env vars with trailing newline causing INVALID_CLIENT on Spotify OAuth"
+				},
+				{
+					"type": "fix",
+					"scope": "auth",
+					"message": "Set AUTH_URL to production domain for correct OAuth redirect"
+				},
+				{
+					"type": "refactor",
+					"scope": "infra",
+					"message": "Refined versioning strategy: PATCH for invisible changes, MINOR for user-visible, MAJOR for breaking"
+				},
+				{
+					"type": "chore",
+					"scope": "infra",
+					"message": "version-bump.sh now scaffolds changelog.json entries automatically"
+				}
+			]
+		},
+		{
+			"version": "0.4.0",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Full image generation pipeline: lyrics extraction, tiered object analysis, collision-aware convergence, Replicate Flux Schnell generation"
+				},
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "9 cron worker modules: crypto, image, replicate, spotify, pipeline, lyrics, openai, extraction, index"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "GPT-4o-mini batch extraction and convergence (2 LLM calls per playlist, ~$0.002 total)"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Collision detection: cross-playlist claimed objects registry with supersede logic"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Change detection with tiered thresholds (50% for 2 or fewer tracks, 33% for 3, 25% for 4+)"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "lyrics.ovh integration with 5s timeout, concurrency 5, and metadata fallback"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "@cf-wasm/photon JPEG compression for Spotify upload (under 192KB)"
+				},
+				{
+					"type": "feat",
+					"scope": "db",
+					"message": "D1 schema additions: styles, playlist_analyses, claimed_objects tables; generations audit columns"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Dashboard overview: active style card, pipeline timeline, playlist stats, recent generations"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Settings page: schedule configuration, art style selector, account management"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "NavItems with active state indicator (aria-current)"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "6 art styles seeded: Bleached Crosshatch, Neon Noir, Soft Watercolor, Brutalist Collage, Chromatic Glass, Ukiyo-e Wave"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "R2 image archival with structured key paths"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "AES-256-GCM encryption via Web Crypto API (worker-compatible)"
+				},
+				{
+					"type": "chore",
+					"scope": "docs",
+					"message": "BUILDPLAN.md with full Phase 3.5 implementation notes"
+				},
+				{
+					"type": "refactor",
+					"scope": "ui",
+					"message": "Playlists grid moved from / to /playlists"
+				},
+				{
+					"type": "refactor",
+					"scope": "ui",
+					"message": "NavDock restructured: logo to /, playlists to /playlists, settings to /settings"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Focus-visible rule extended to input, select, and textarea elements"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "getDashboardData wrapped in try/catch with error state fallback"
+				}
+			]
+		},
+		{
+			"version": "0.3.0",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "design",
+					"message": "Design system: glassmorphism, Spotify green aura, 4-concentric-ring logo"
+				},
+				{
+					"type": "feat",
+					"scope": "design",
+					"message": "CSS custom properties for all design tokens (colors, spacing, radii, typography)"
+				},
+				{
+					"type": "feat",
+					"scope": "design",
+					"message": "Glass utility class with backdrop blur, border, and shadow"
+				},
+				{
+					"type": "feat",
+					"scope": "design",
+					"message": "Aura utility class with gradient glow effect"
+				},
+				{
+					"type": "feat",
+					"scope": "a11y",
+					"message": "Text hierarchy with WCAG contrast: primary 15:1, secondary 7.8:1, muted 4.7:1"
+				},
+				{
+					"type": "feat",
+					"scope": "a11y",
+					"message": "Global focus-visible: Spotify green outline on all interactive elements"
+				},
+				{
+					"type": "feat",
+					"scope": "a11y",
+					"message": "Skip-to-content link for keyboard navigation"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "NavDock with server-side auth and client-side UserDropdown"
+				}
+			]
+		},
+		{
+			"version": "0.2.0",
+			"date": "2026-02-14",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "auth",
+					"message": "Auth.js v5 (beta.30) with Spotify OAuth provider"
+				},
+				{
+					"type": "feat",
+					"scope": "auth",
+					"message": "Single-user gate: only evancnavarro can sign in"
+				},
+				{
+					"type": "feat",
+					"scope": "auth",
+					"message": "AES-256-GCM encrypted refresh token storage in D1"
+				},
+				{
+					"type": "feat",
+					"scope": "db",
+					"message": "D1 REST API access layer (Vercel cannot bind D1 natively)"
+				},
+				{
+					"type": "feat",
+					"scope": "spotify",
+					"message": "Spotify API helpers: fetch playlists with pagination"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Dashboard layout with auth middleware protection"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Playlist grid with Spotify cover thumbnails"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Playlist sync: Spotify to D1 via after() callback"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Edge Runtime compatibility: split auth.config.ts (Edge-safe) from auth.ts (Node)"
+				}
+			]
+		},
+		{
+			"version": "0.1.0",
+			"date": "2026-02-14",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Monorepo scaffolding: apps/web, workers/cron, packages/shared"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Next.js 16 with Tailwind v4 and DISC design tokens"
+				},
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "Cloudflare Worker stub with D1 database binding"
+				},
+				{
+					"type": "feat",
+					"scope": "types",
+					"message": "Shared types (Spotify Feb 2026 compliant), styles, and version module"
+				},
+				{
+					"type": "feat",
+					"scope": "db",
+					"message": "D1 migration: users, playlists, generations, jobs tables"
+				},
+				{
+					"type": "chore",
+					"scope": "infra",
+					"message": "Biome linting and formatting"
+				},
+				{
+					"type": "chore",
+					"scope": "ci",
+					"message": "GitHub Actions CI (lint + typecheck)"
+				},
+				{
+					"type": "chore",
+					"scope": "infra",
+					"message": "Version management: version-bump.sh, version-check.sh pre-push gate"
+				},
+				{
+					"type": "chore",
+					"scope": "infra",
+					"message": "Husky hooks: pre-commit (lint-staged), commit-msg (commitlint), pre-push (version, lint, typecheck)"
+				}
+			]
+		}
+	]
+}

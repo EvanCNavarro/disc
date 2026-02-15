@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-02-15
+
+### Added
+- Changelog page at `/changelog` with search, fuzzy word matching, and highlighted results
+- "What's New" nav link in NavDock
+- 5 new art styles: Neon Noir, Soft Watercolor, Brutalist Collage, Chromatic Glass, Ukiyo-e Wave
+- Structured changelog.json with types, utilities, and version-bump.sh integration
+- Production deployment: disc.400.dev live with Spotify OAuth, TLS, and all worker secrets
+
+### Fixed
+- Vercel env vars with trailing newline causing INVALID_CLIENT on Spotify OAuth
+- AUTH_URL set to production domain for correct OAuth redirect
+
+### Changed
+- Refined versioning strategy: PATCH for invisible changes, MINOR for user-visible, MAJOR for breaking
+- version-bump.sh now scaffolds changelog.json entries automatically
+
 ## [0.4.0] - 2026-02-15
 
 ### Added

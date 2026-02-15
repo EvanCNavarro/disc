@@ -3,11 +3,14 @@
 # Version Bump Script for DISC
 # Usage: ./scripts/version-bump.sh [major|minor|patch]
 # If no argument provided, shows current version and prompts for bump type
+#
+# Updates: version.ts, package.json, changelog.json (scaffolds empty entry)
 
 set -e
 
 VERSION_FILE="packages/shared/src/version.ts"
 ROOT_PKG="package.json"
+CHANGELOG_JSON="packages/shared/src/changelog.json"
 
 # Extract current version from version.ts
 CURRENT_VERSION=$(grep "APP_VERSION" "$VERSION_FILE" | sed "s/.*\"\(.*\)\".*/\1/")
@@ -30,17 +33,21 @@ if [ -z "$BUMP_TYPE" ]; then
   echo "Which version to bump?"
   echo ""
   echo "  [1] PATCH -> v$MAJOR.$MINOR.$((PATCH + 1))"
-  echo "      Bug fixes, infrastructure, refactors, dependency updates"
+  echo "      Bug fixes, typos, config tweaks, dep updates, refactors"
+  echo "      (Users won't notice anything new)"
   echo ""
   echo "  [2] MINOR -> v$MAJOR.$((MINOR + 1)).0"
-  echo "      New features, significant UX changes, new pages"
+  echo "      New features, new pages, visible UX changes"
+  echo "      (Users will see something new)"
   echo ""
   echo "  [3] MAJOR -> v$((MAJOR + 1)).0.0"
-  echo "      Breaking changes, major architecture changes"
+  echo "      Breaking changes, data migrations, architecture overhaul"
+  echo "      (Existing behavior changes or breaks)"
   echo ""
-  echo "Decision: Will regular USERS notice something new?"
-  echo "  No  -> PATCH"
-  echo "  Yes -> MINOR"
+  echo "Decision tree:"
+  echo "  Does existing behavior break? -> MAJOR"
+  echo "  Will users notice something?  -> MINOR"
+  echo "  Everything else               -> PATCH"
   echo ""
   read -p "Enter choice (1/2/3): " choice
 
@@ -79,9 +86,31 @@ sed -i '' "s/APP_VERSION = \"$CURRENT_VERSION\"/APP_VERSION = \"$NEW_VERSION\"/"
 # Update root package.json
 sed -i '' "s/\"version\": \"$CURRENT_VERSION\"/\"version\": \"$NEW_VERSION\"/" "$ROOT_PKG"
 
+# Scaffold changelog.json entry for the new version
+TODAY=$(date +%Y-%m-%d)
+node -e "
+const fs = require('fs');
+const data = JSON.parse(fs.readFileSync('$CHANGELOG_JSON', 'utf8'));
+// Only add if this version doesn't already exist
+if (!data.versions.some(v => v.version === '$NEW_VERSION')) {
+  data.versions.unshift({
+    version: '$NEW_VERSION',
+    date: '$TODAY',
+    entries: []
+  });
+  fs.writeFileSync('$CHANGELOG_JSON', JSON.stringify(data, null, 2) + '\n');
+  console.log('  Scaffolded $CHANGELOG_JSON with empty v$NEW_VERSION entry');
+} else {
+  console.log('  $CHANGELOG_JSON already has v$NEW_VERSION');
+}
+"
+
 echo "Updated $VERSION_FILE"
 echo "Updated $ROOT_PKG"
 echo ""
 echo "New version: v$NEW_VERSION"
 echo ""
-echo "Don't forget to commit this change before pushing!"
+echo "Next steps:"
+echo "  1. Add entries to $CHANGELOG_JSON"
+echo "  2. Update CHANGELOG.md"
+echo "  3. Commit and push"
