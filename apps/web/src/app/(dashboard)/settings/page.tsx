@@ -144,7 +144,7 @@ export default async function SettingsPage() {
 
 					<button
 						type="submit"
-						className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+						className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
 					>
 						Save Schedule
 					</button>
@@ -197,7 +197,7 @@ export default async function SettingsPage() {
 
 						<button
 							type="submit"
-							className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
+							className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
 						>
 							Update Style
 						</button>
@@ -238,7 +238,7 @@ export default async function SettingsPage() {
 				<form action={signOutAction} className="mt-[var(--space-md)]">
 					<button
 						type="submit"
-						className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)]"
+						className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)]"
 					>
 						Sign Out
 					</button>

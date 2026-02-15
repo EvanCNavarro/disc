@@ -1,6 +1,42 @@
 {
 	"versions": [
 		{
+			"version": "0.5.1",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Universal button standard (px-3 py-2 text-xs) applied across all components"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Login page redesign: breathing DISC logo background, large Spotify CTA, 'Welcome to DISC' heading"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "DISC logo footer button with green fireworks easter egg (fireworks-js)"
+				},
+				{
+					"type": "refactor",
+					"scope": "ui",
+					"message": "Max-width standardized to 1280px (max-w-7xl) across dashboard, changelog, and footer"
+				},
+				{
+					"type": "perf",
+					"scope": "ui",
+					"message": "Lighter skeleton loader and staleTimes RSC caching for faster navigation"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "BackToTop only shows on scrollable pages; breathing logos avoid hero zone and footer"
+				}
+			]
+		},
+		{
 			"version": "0.5.0",
 			"date": "2026-02-15",
 			"entries": [
@@ -12,7 +48,7 @@
 				{
 					"type": "feat",
 					"scope": "ui",
-					"message": "What's New nav link in NavDock for quick changelog access"
+					"message": "What's New? nav link visible on all pages (authenticated and unauthenticated) with pulsing unread indicator"
 				},
 				{
 					"type": "feat",
@@ -32,7 +68,7 @@
 				{
 					"type": "feat",
 					"scope": "ui",
-					"message": "Footer with 400 Faces branding, DISC description, version number, and changelog link"
+					"message": "Footer with 400 Faces branding, dynamic copyright year, and clickable Changelog version badge"
 				},
 				{
 					"type": "feat",

@@ -1,16 +1,11 @@
-import { redirect } from "next/navigation";
 import { Footer } from "@/components/Footer";
 import { NavDock } from "@/components/NavDock";
-import { auth } from "@/lib/auth";
 
-export default async function DashboardLayout({
+export default function ChangelogLayout({
 	children,
 }: {
 	children: React.ReactNode;
 }) {
-	const session = await auth();
-	if (!session || session.error) redirect("/login");
-
 	return (
 		<>
 			<a href="#main-content" className="skip-link">

@@ -2,7 +2,7 @@
 node_modules/
 
 # Build outputs
-.next/
+.next*/
 .next.nosync/
 out/
 dist/
@@ -35,3 +35,6 @@ coverage/
 *.tsbuildinfo
 .env*.local
 .vercel
+
+# Auth tokens
+.npmrc

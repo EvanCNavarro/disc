@@ -192,7 +192,7 @@ export function ChangelogList() {
 							key={opt.value}
 							type="button"
 							onClick={() => setFilter(opt.value)}
-							className={`rounded-[var(--radius-pill)] px-3 py-1 text-xs font-medium transition-colors ${
+							className={`rounded-[var(--radius-pill)] px-3 py-2 text-xs font-medium transition-colors ${
 								filter === opt.value
 									? "bg-[var(--color-accent)] text-white"
 									: "bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border)]"

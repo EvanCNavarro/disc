@@ -10,6 +10,10 @@ const nextConfig: NextConfig = {
 		root: resolve(import.meta.dirname, "../.."),
 	},
 	allowedDevOrigins: ["127.0.0.1"],
+	experimental: {
+		// Cache dynamic RSC payloads for 30s so back-and-forth navigation is instant
+		staleTimes: { dynamic: 30 },
+	},
 	transpilePackages: ["@disc/shared"],
 	images: {
 		remotePatterns: [

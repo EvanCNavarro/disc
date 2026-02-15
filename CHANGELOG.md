@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-02-15
+
+### Added
+- Universal button standard (px-3 py-2 text-xs font-medium, 32px height) across all components
+- Login page redesign: zen breathing DISC logo background, large Spotify CTA button, "Welcome to DISC" heading
+- DISC logo footer button with green fireworks easter egg (fireworks-js)
+- BackToTop only renders on scrollable pages (ResizeObserver)
+
+### Changed
+- Max-width standardized to 1280px (max-w-7xl) across dashboard, changelog, and footer
+- Footer description text constrained to 4 lines (max-w-[60ch])
+- "What's New?" nav link visible on all pages (authenticated and unauthenticated)
+- Changelog page accessible without authentication
+- Footer visible on login page with version badge
+- Combined "Changelog v0.5.0" clickable badge in footer
+
+### Performance
+- Lighter skeleton loader (3 minimal placeholders instead of 15 cards)
+- staleTimes RSC caching (30s) for instant back/forward navigation
+
 ## [0.5.0] - 2026-02-15
 
 ### Added

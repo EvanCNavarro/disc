@@ -165,7 +165,7 @@ export default async function DashboardPage() {
 					</div>
 					<Link
 						href="/settings"
-						className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
+						className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-hover)]"
 					>
 						Change Style
 					</Link>

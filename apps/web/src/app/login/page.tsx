@@ -1,5 +1,7 @@
 import { redirect } from "next/navigation";
 import { DiscLogo } from "@/components/DiscLogo";
+import { DiscRipples } from "@/components/DiscRipples";
+import { Footer } from "@/components/Footer";
 import { auth, signIn } from "@/lib/auth";
 
 export default async function LoginPage() {
@@ -7,35 +9,24 @@ export default async function LoginPage() {
 	if (session && !session.error) redirect("/");
 
 	return (
-		<main className="flex min-h-[calc(100vh-var(--nav-height)-var(--space-md)*2)] flex-col items-center justify-center gap-8 p-8">
-			{/* Green aura behind hero */}
-			<div
-				className="pointer-events-none absolute inset-0"
-				style={{
-					backgroundImage:
-						"radial-gradient(ellipse 50% 40% at 50% 45%, var(--aura-color) 0%, transparent 70%)",
-				}}
-			/>
+		<div className="flex min-h-dvh flex-col">
+			<DiscRipples />
 
-			<div className="relative flex flex-col items-center gap-6">
+			<main className="relative flex flex-1 flex-col items-center justify-center gap-6 px-6 py-12">
 				<DiscLogo size={80} />
 
-				<div className="flex flex-col items-center gap-2">
-					<h1 className="text-3xl font-bold tracking-tight">DISC</h1>
-					<p className="text-[var(--color-text-muted)]">
-						Daily Image Spotify Covers
-					</p>
-				</div>
+				<h1 className="text-2xl font-bold tracking-tight">Welcome to DISC</h1>
 
 				<form
 					action={async () => {
 						"use server";
 						await signIn("spotify", { redirectTo: "/" });
 					}}
+					className="w-full max-w-sm"
 				>
 					<button
 						type="submit"
-						className="flex cursor-pointer items-center gap-3 rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-8 py-3 text-base font-semibold text-white shadow-[var(--shadow-glow)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-accent-hover)] hover:shadow-[0_0_32px_var(--color-accent-muted)]"
+						className="flex w-full cursor-pointer items-center justify-center gap-3 rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-8 py-4 text-base font-semibold text-white shadow-[var(--shadow-glow)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-accent-hover)] hover:shadow-[0_0_32px_var(--color-accent-muted)]"
 					>
 						<svg
 							width="20"
@@ -49,7 +40,9 @@ export default async function LoginPage() {
 						Sign in with Spotify
 					</button>
 				</form>
-			</div>
-		</main>
+			</main>
+
+			<Footer />
+		</div>
 	);
 }

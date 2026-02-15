@@ -105,7 +105,9 @@ export const authConfig = {
 
 		// Used by middleware: return false → redirect to pages.signIn
 		authorized({ auth }) {
-			return !!auth;
+			if (!auth) return false;
+			if (auth.error) return false; // Force re-login on token refresh failure
+			return true;
 		},
 	},
 } satisfies NextAuthConfig;
