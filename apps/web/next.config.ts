@@ -1,9 +1,11 @@
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 const nextConfig: NextConfig = {
-	// .nosync suffix prevents iCloud Drive from evicting Turbopack cache files
-	distDir: ".next.nosync",
+	// .nosync suffix prevents iCloud Drive from evicting Turbopack cache files (dev only)
+	...(isDev && { distDir: ".next.nosync" }),
 	turbopack: {
 		root: resolve(import.meta.dirname, "../.."),
 	},
