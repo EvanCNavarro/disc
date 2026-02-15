@@ -10,7 +10,7 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
 	const trackCount = playlist.items.total;
 
 	return (
-		<div className="overflow-hidden rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] shadow-[var(--shadow-sm)] transition-shadow duration-[var(--duration-normal)] hover:shadow-[var(--shadow-md)]">
+		<div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] shadow-[var(--shadow-sm)] transition-all duration-[var(--duration-normal)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5">
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
 				{coverUrl ? (
 					<Image

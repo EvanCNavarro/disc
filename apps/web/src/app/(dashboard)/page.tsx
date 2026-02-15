@@ -37,7 +37,10 @@ export default async function DashboardPage() {
 			</div>
 
 			{fetchError && (
-				<div className="rounded-[var(--radius-sm)] border border-[var(--color-destructive)] bg-[var(--color-destructive)]/10 px-[var(--space-md)] py-[var(--space-sm)] text-sm text-[var(--color-destructive)]">
+				<div
+					role="alert"
+					className="rounded-[var(--radius-md)] border border-[var(--color-destructive)] bg-red-50 px-[var(--space-md)] py-[var(--space-sm)] text-sm text-[var(--color-destructive)]"
+				>
 					Failed to load playlists. Try refreshing the page.
 				</div>
 			)}

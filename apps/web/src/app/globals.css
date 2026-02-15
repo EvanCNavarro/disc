@@ -2,21 +2,55 @@
 
 /* ============================================================
    DISC Design Tokens
+   ============================================================
+   Design philosophy: Soft, rounded surfaces (like a disc) that
+   let Spotify cover art pop as the focal contrast. Glassmorphism
+   with a subtle Spotify-green radial aura. Dark grays + blacks
+   with proper text hierarchy.
+
+   Color contrast (WCAG AA):
+   - --color-text on --color-bg:         ~15:1  (body text)
+   - --color-text-secondary on --color-bg: ~7.8:1  (subheadings)
+   - --color-text-muted on --color-bg:    ~4.7:1  (captions, normal text)
+   - --color-text-faint on --color-bg:    ~3.8:1  (large text / UI only)
    ============================================================ */
 
 :root {
-	/* Brand Colors */
+	/* ── Brand Colors ── */
 	--color-bg: #fafafa;
 	--color-bg-elevated: #ffffff;
 	--color-text: #171717;
+	--color-text-secondary: #525252;
 	--color-text-muted: #737373;
+	--color-text-faint: #808080; /* 3.78:1 — large text (18px+) and UI components only */
 	--color-border: #e5e5e5;
-	--color-accent: #1db954;
-	--color-accent-hover: #1ed760;
+	--color-border-subtle: #f0f0f0;
+	--color-separator: #d4d4d4;
 	--color-surface: #f5f5f5;
+	--color-surface-hover: #ebebeb;
 	--color-destructive: #ef4444;
 
-	/* Spacing */
+	/* ── Spotify / Accent ── */
+	--color-accent: #1db954;
+	--color-accent-hover: #1ed760;
+	--color-accent-muted: rgba(29, 185, 84, 0.12);
+	--color-accent-glow: rgba(29, 185, 84, 0.08);
+
+	/* ── Glassmorphism ── */
+	--glass-bg: rgba(255, 255, 255, 0.72);
+	--glass-border: rgba(255, 255, 255, 0.2);
+	--glass-blur: 20px;
+	--glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+
+	/* ── Aura (radial glow behind nav/hero) ── */
+	--aura-color: rgba(29, 185, 84, 0.06);
+	--aura-gradient: radial-gradient(
+		ellipse 60% 50% at 50% 0%,
+		var(--aura-color) 0%,
+		transparent 70%
+	);
+
+	/* ── Spacing ── */
 	--space-xs: 4px;
 	--space-sm: 8px;
 	--space-md: 16px;
@@ -25,35 +59,56 @@
 	--space-2xl: 48px;
 	--space-3xl: 64px;
 
-	/* Border Radius */
-	--radius-sm: 8px;
-	--radius-md: 12px;
-	--radius-lg: 16px;
+	/* ── Border Radius (disc-like: generous, fully round) ── */
+	--radius-sm: 12px;
+	--radius-md: 16px;
+	--radius-lg: 24px;
+	--radius-xl: 32px;
 	--radius-pill: 9999px;
 
-	/* Shadows */
-	--shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-	--shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
-	--shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+	/* ── Navigation ── */
+	--nav-height: 56px;
 
-	/* Typography */
+	/* ── Shadows (soft, diffuse) ── */
+	--shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+	--shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+	--shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
+	--shadow-glow: 0 0 24px var(--color-accent-muted);
+
+	/* ── Typography ── */
 	--font-body: var(--font-inter), system-ui, sans-serif;
 	--font-display: var(--font-inter), system-ui, sans-serif;
 
-	/* Transitions */
+	/* ── Transitions ── */
 	--duration-fast: 150ms;
 	--duration-normal: 250ms;
+	--duration-slow: 400ms;
 	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Dark mode */
+/* ── Dark mode ── */
 :root.dark {
 	--color-bg: #0a0a0a;
-	--color-bg-elevated: #171717;
+	--color-bg-elevated: #141414;
 	--color-text: #fafafa;
+	--color-text-secondary: #d4d4d4;
 	--color-text-muted: #a3a3a3;
+	--color-text-faint: #8a8a8a; /* 5.83:1 on #0a0a0a */
 	--color-border: #262626;
-	--color-surface: #1c1c1c;
+	--color-border-subtle: #1c1c1c;
+	--color-separator: #333333;
+	--color-surface: #1a1a1a;
+	--color-surface-hover: #222222;
+
+	--color-accent-muted: rgba(29, 185, 84, 0.15);
+	--color-accent-glow: rgba(29, 185, 84, 0.1);
+
+	--glass-bg: rgba(20, 20, 20, 0.75);
+	--glass-border: rgba(255, 255, 255, 0.06);
+	--glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+
+	--aura-color: rgba(29, 185, 84, 0.08);
 }
 
 /* ============================================================
@@ -64,21 +119,77 @@
 	--color-bg: var(--color-bg);
 	--color-bg-elevated: var(--color-bg-elevated);
 	--color-text: var(--color-text);
+	--color-text-secondary: var(--color-text-secondary);
 	--color-text-muted: var(--color-text-muted);
+	--color-text-faint: var(--color-text-faint);
 	--color-border: var(--color-border);
+	--color-border-subtle: var(--color-border-subtle);
 	--color-accent: var(--color-accent);
 	--color-accent-hover: var(--color-accent-hover);
+	--color-accent-muted: var(--color-accent-muted);
 	--color-surface: var(--color-surface);
+	--color-surface-hover: var(--color-surface-hover);
 	--color-destructive: var(--color-destructive);
 
 	--radius-sm: var(--radius-sm);
 	--radius-md: var(--radius-md);
 	--radius-lg: var(--radius-lg);
+	--radius-xl: var(--radius-xl);
 	--radius-pill: var(--radius-pill);
 
 	--shadow-sm: var(--shadow-sm);
 	--shadow-md: var(--shadow-md);
 	--shadow-lg: var(--shadow-lg);
+	--shadow-glow: var(--shadow-glow);
+}
+
+/* ============================================================
+   Logo Animations
+   ============================================================ */
+
+@keyframes disc-ring-in {
+	from {
+		opacity: 0;
+		transform: scale(0.7);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes disc-pulse {
+	0%,
+	100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.02);
+	}
+}
+
+.disc-ring {
+	animation: disc-ring-in 0.4s var(--ease-out) both;
+}
+
+.disc-logo-wrapper {
+	animation: disc-pulse 4s ease-in-out 1.2s infinite;
+}
+
+/* ============================================================
+   Glass Utilities
+   ============================================================ */
+
+.glass {
+	background: var(--glass-bg);
+	backdrop-filter: blur(var(--glass-blur));
+	-webkit-backdrop-filter: blur(var(--glass-blur));
+	border: 1px solid var(--glass-border);
+	box-shadow: var(--glass-shadow);
+}
+
+.aura {
+	background-image: var(--aura-gradient);
 }
 
 /* ============================================================
@@ -94,6 +205,34 @@ body {
 /* ============================================================
    Accessibility
    ============================================================ */
+
+/* Focus ring — Spotify green, consistent across all interactive elements */
+a:focus-visible,
+button:focus-visible,
+[tabindex]:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+}
+
+/* Skip to main content */
+.skip-link {
+	position: fixed;
+	top: -100%;
+	left: var(--space-md);
+	z-index: 100;
+	padding: var(--space-sm) var(--space-md);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-elevated);
+	color: var(--color-text);
+	font-size: 0.875rem;
+	font-weight: 500;
+	box-shadow: var(--shadow-md);
+	transition: top var(--duration-fast) var(--ease-out);
+}
+
+.skip-link:focus {
+	top: var(--space-md);
+}
 
 @media (prefers-reduced-motion: reduce) {
 	*,

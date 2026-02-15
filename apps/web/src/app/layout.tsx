@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
+import { NavDock } from "@/components/NavDock";
 import { Providers } from "@/components/Providers";
 import "./globals.css";
 
@@ -22,7 +23,18 @@ export default function RootLayout({
 	return (
 		<html lang="en">
 			<body className={`${inter.variable} antialiased`}>
-				<Providers>{children}</Providers>
+				<Providers>
+					<a href="#main-content" className="skip-link">
+						Skip to content
+					</a>
+					<NavDock />
+					<div
+						id="main-content"
+						className="pt-[calc(var(--nav-height)+var(--space-md)*2)]"
+					>
+						{children}
+					</div>
+				</Providers>
 			</body>
 		</html>
 	);
