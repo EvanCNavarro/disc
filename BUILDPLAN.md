@@ -1,7 +1,9 @@
-# DISC — Phase 3.5 Build Plan
+# DISC — Build Plan
 
-> **Phase 3.5** = Playlist Detail, Transparency & Intelligence
-> **Status**: Not started. Phase 3 (pipeline + dashboard + settings) is complete and deployed.
+> **Current version**: 0.5.0 (changelog + footer + unread indicator)
+> **Phase 3**: Complete — pipeline, dashboard, settings, deployed to disc.400.dev
+> **Phase 3.5**: Complete — changelog page, structured changelog.json, footer, unread tracking, breadcrumbs
+> **Phase 4**: Not started — playlist detail, image serving, manual triggers (Tier 1 below)
 
 Phase 3 built the pipeline (lyrics → extraction → convergence → image) and the dashboard overview. Phase 3.5 adds the **transparency layer**: every piece of data the pipeline produces should be visible, navigable, and actionable from the UI.
 
@@ -712,7 +714,10 @@ B11 (Theme grouping)             ← Future
 
 ## Version Strategy
 
-Phase 3.5 is a MINOR bump per feature group:
-- **0.5.0**: B1 + B4 + B8 (playlist detail + images + trigger) — Tier 1 complete
-- **0.6.0**: B2 + B3 + B6 + B7 (caching + incremental + cost + metadata) — Tier 2 complete
-- **0.7.0**: B5 + B9 + B10 (job detail + scoring + skeletons) — Tier 3 complete
+MINOR bumps for user-visible feature groups, PATCH for fixes/infra between:
+- **0.5.0**: Changelog, footer, unread indicator, versioning refinement *(done)*
+- **0.5.x**: Any bug fixes or infra tweaks before Tier 1
+- **0.6.0**: B1 + B4 + B8 (playlist detail + images + trigger) — Tier 1 complete
+- **0.6.x**: Patches between Tier 1 and 2
+- **0.7.0**: B2 + B3 + B6 + B7 (caching + incremental + cost + metadata) — Tier 2 complete
+- **0.8.0**: B5 + B9 + B10 (job detail + scoring + skeletons) — Tier 3 complete

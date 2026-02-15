@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 5 new art styles: Neon Noir, Soft Watercolor, Brutalist Collage, Chromatic Glass, Ukiyo-e Wave
 - Structured changelog.json with types, utilities, and version-bump.sh integration
 - Production deployment: disc.400.dev live with Spotify OAuth, TLS, and all worker secrets
+- Footer with 400 Faces branding, DISC description, version, and changelog link
+- Pulsing blue unread indicator on user avatar when new changelog entries exist
+- "What's New" menu item in user dropdown with unread dot
+- Auto-mark changelog as seen on visit, per-user tracking in D1
+- Breadcrumb navigation on changelog page (Home > Changelog)
 
 ### Fixed
 - Vercel env vars with trailing newline causing INVALID_CLIENT on Spotify OAuth

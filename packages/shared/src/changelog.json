@@ -30,6 +30,31 @@
 					"message": "Production deployment: disc.400.dev live with Spotify OAuth, TLS, and all worker secrets"
 				},
 				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Footer with 400 Faces branding, DISC description, version number, and changelog link"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Pulsing blue unread indicator on user avatar when new changelog entries exist"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "What's New menu item in user dropdown with unread dot"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Auto-mark changelog as seen on visit, per-user tracking in D1"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Breadcrumb navigation on changelog page (Home > Changelog)"
+				},
+				{
 					"type": "fix",
 					"scope": "auth",
 					"message": "Fix Vercel env vars with trailing newline causing INVALID_CLIENT on Spotify OAuth"
