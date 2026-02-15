@@ -7,4 +7,4 @@
  * - MINOR (0.X.0): New features, significant UI changes, new pages
  * - PATCH (0.0.X): Bug fixes, minor tweaks, styling, copy changes
  */
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.3.0";
