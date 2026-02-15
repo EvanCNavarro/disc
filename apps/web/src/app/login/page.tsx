@@ -4,7 +4,7 @@ import { auth, signIn } from "@/lib/auth";
 
 export default async function LoginPage() {
 	const session = await auth();
-	if (session) redirect("/");
+	if (session && !session.error) redirect("/");
 
 	return (
 		<main className="flex min-h-[calc(100vh-var(--nav-height)-var(--space-md)*2)] flex-col items-center justify-center gap-8 p-8">
