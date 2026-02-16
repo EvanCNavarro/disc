@@ -6,7 +6,11 @@ import type {
 	TrackExtraction,
 } from "@disc/shared";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { RepeatIcon } from "@hugeicons-pro/core-stroke-rounded";
+import {
+	ArrowDown01Icon,
+	RepeatIcon,
+} from "@hugeicons-pro/core-stroke-rounded";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -97,6 +101,7 @@ export function PlaylistDetailClient({
 	generations,
 	claimedObjects,
 }: PlaylistDetailClientProps) {
+	const router = useRouter();
 	const [generating, setGenerating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const isProcessing =
@@ -118,8 +123,8 @@ export function PlaylistDetailClient({
 				const data = await res.json();
 				throw new Error(data.error || "Generation failed");
 			}
-			// Reload the page to reflect new state
-			window.location.reload();
+			// Revalidate server component data without full page reload
+			router.refresh();
 		} catch (err) {
 			setError(err instanceof Error ? err.message : "Unknown error");
 			setGenerating(false);
@@ -216,13 +221,13 @@ export function PlaylistDetailClient({
 									<div className="flex flex-wrap gap-2 text-xs">
 										{analysis.tracks_added &&
 											analysis.tracks_added.length > 0 && (
-												<span className="rounded-[var(--radius-pill)] bg-green-100 px-2 py-0.5 text-green-800">
+												<span className="rounded-[var(--radius-pill)] bg-[var(--color-accent-muted)] px-2 py-0.5 text-[var(--color-accent)]">
 													+{analysis.tracks_added.length} added
 												</span>
 											)}
 										{analysis.tracks_removed &&
 											analysis.tracks_removed.length > 0 && (
-												<span className="rounded-[var(--radius-pill)] bg-red-100 px-2 py-0.5 text-red-800">
+												<span className="rounded-[var(--radius-pill)] bg-[var(--color-destructive-muted,#fee2e2)] px-2 py-0.5 text-[var(--color-destructive)]">
 													-{analysis.tracks_removed.length} removed
 												</span>
 											)}
@@ -323,9 +328,9 @@ export function PlaylistDetailClient({
 																	key={obj.object}
 																	className={`rounded-[var(--radius-pill)] px-1.5 py-0.5 text-xs ${
 																		obj.tier === "high"
-																			? "bg-green-100 text-green-800"
+																			? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
 																			: obj.tier === "medium"
-																				? "bg-yellow-100 text-yellow-800"
+																				? "bg-[var(--color-warning-muted,#fef3c7)] text-[var(--color-warning,#92400e)]"
 																				: "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
 																	}`}
 																	title={obj.reasoning}
@@ -452,7 +457,7 @@ function GenerationCard({ generation }: { generation: Generation }) {
 				<span
 					className={`shrink-0 text-[var(--color-text-faint)] transition-transform ${expanded ? "rotate-180" : ""}`}
 				>
-					▾
+					<HugeiconsIcon icon={ArrowDown01Icon} size={16} />
 				</span>
 			</button>
 

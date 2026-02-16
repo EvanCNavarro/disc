@@ -82,19 +82,46 @@ async function fetchPlaylistDetail(
 	const playlist = playlists[0];
 	const playlistId = playlist.id;
 
-	// Latest analysis
-	const analysisRows = await queryD1<
-		DbPlaylistAnalysis & { style_name: string }
-	>(
-		`SELECT pa.*,
-			COALESCE(s.name, pa.style_id) AS style_name
-		 FROM playlist_analyses pa
-		 LEFT JOIN styles s ON pa.style_id = s.id
-		 WHERE pa.playlist_id = ? AND pa.user_id = ?
-		 ORDER BY pa.created_at DESC
-		 LIMIT 1`,
-		[playlistId, userId],
-	);
+	// Parallel fetch: analysis, generations, and claimed objects are independent
+	const [analysisRows, generations, claimedObjects] = await Promise.all([
+		queryD1<DbPlaylistAnalysis & { style_name: string }>(
+			`SELECT pa.*,
+				COALESCE(s.name, pa.style_id) AS style_name
+			 FROM playlist_analyses pa
+			 LEFT JOIN styles s ON pa.style_id = s.id
+			 WHERE pa.playlist_id = ? AND pa.user_id = ?
+			 ORDER BY pa.created_at DESC
+			 LIMIT 1`,
+			[playlistId, userId],
+		),
+		queryD1<PlaylistDetailData["generations"][number]>(
+			`SELECT
+				g.id,
+				g.r2_key,
+				g.symbolic_object,
+				COALESCE(s.name, g.style_id) AS style_name,
+				g.prompt,
+				g.trigger_type,
+				g.status,
+				g.duration_ms,
+				g.cost_usd,
+				g.cost_breakdown,
+				g.analysis_id,
+				g.created_at
+			 FROM generations g
+			 LEFT JOIN styles s ON g.style_id = s.id
+			 WHERE g.playlist_id = ? AND g.user_id = ?
+			 ORDER BY g.created_at DESC`,
+			[playlistId, userId],
+		),
+		queryD1<PlaylistDetailData["claimedObjects"][number]>(
+			`SELECT id, object_name, aesthetic_context, created_at, superseded_at
+			 FROM claimed_objects
+			 WHERE playlist_id = ? AND user_id = ?
+			 ORDER BY created_at DESC`,
+			[playlistId, userId],
+		),
+	]);
 
 	let analysis: PlaylistDetailData["analysis"] = null;
 	if (analysisRows.length > 0) {
@@ -120,39 +147,6 @@ async function fetchPlaylistDetail(
 			// Corrupted analysis — treat as null
 		}
 	}
-
-	// All generations (most recent first)
-	const generations = await queryD1<PlaylistDetailData["generations"][number]>(
-		`SELECT
-			g.id,
-			g.r2_key,
-			g.symbolic_object,
-			COALESCE(s.name, g.style_id) AS style_name,
-			g.prompt,
-			g.trigger_type,
-			g.status,
-			g.duration_ms,
-			g.cost_usd,
-			g.cost_breakdown,
-			g.analysis_id,
-			g.created_at
-		 FROM generations g
-		 LEFT JOIN styles s ON g.style_id = s.id
-		 WHERE g.playlist_id = ? AND g.user_id = ?
-		 ORDER BY g.created_at DESC`,
-		[playlistId, userId],
-	);
-
-	// Claimed objects
-	const claimedObjects = await queryD1<
-		PlaylistDetailData["claimedObjects"][number]
-	>(
-		`SELECT id, object_name, aesthetic_context, created_at, superseded_at
-		 FROM claimed_objects
-		 WHERE playlist_id = ? AND user_id = ?
-		 ORDER BY created_at DESC`,
-		[playlistId, userId],
-	);
 
 	return { playlist, analysis, generations, claimedObjects };
 }
