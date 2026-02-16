@@ -2,6 +2,7 @@ import type { SpotifyPlaylist } from "@disc/shared";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MusicNote01Icon } from "@hugeicons-pro/core-stroke-rounded";
 import Image from "next/image";
+import Link from "next/link";
 
 interface PlaylistCardProps {
 	playlist: SpotifyPlaylist;
@@ -12,7 +13,10 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
 	const trackCount = playlist.items.total;
 
 	return (
-		<div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] shadow-[var(--shadow-sm)] transition-all duration-[var(--duration-normal)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5">
+		<Link
+			href={`/playlists/${playlist.id}`}
+			className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] shadow-[var(--shadow-sm)] transition-all duration-[var(--duration-normal)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
+		>
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
 				{coverUrl ? (
 					<Image
@@ -35,6 +39,6 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
 					{trackCount} {trackCount === 1 ? "track" : "tracks"}
 				</p>
 			</div>
-		</div>
+		</Link>
 	);
 }
