@@ -17,6 +17,11 @@ interface GenerationRow {
 	cost_usd: number | null;
 	trigger_type: string;
 	created_at: string;
+	model_name: string | null;
+	llm_input_tokens: number | null;
+	llm_output_tokens: number | null;
+	image_model: string | null;
+	cost_breakdown: string | null;
 }
 
 /** GET /api/generations — list recent generations for the authenticated user */
@@ -49,7 +54,12 @@ export async function GET() {
 			g.duration_ms,
 			g.cost_usd,
 			g.trigger_type,
-			g.created_at
+			g.created_at,
+			g.model_name,
+			g.llm_input_tokens,
+			g.llm_output_tokens,
+			g.image_model,
+			g.cost_breakdown
 		 FROM generations g
 		 JOIN playlists p ON g.playlist_id = p.id
 		 LEFT JOIN styles s ON g.style_id = s.id

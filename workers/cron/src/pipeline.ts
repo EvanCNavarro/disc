@@ -23,6 +23,7 @@ import type {
 import { convergeAndSelect, detectChanges, extractThemes } from "./extraction";
 import { compressForSpotify } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
+import { calculateImageCost, calculateLLMCost, LLM_MODEL } from "./pricing";
 import { generateImage } from "./replicate";
 import { fetchPlaylistTracks, uploadPlaylistCover } from "./spotify";
 
@@ -109,6 +110,13 @@ export async function generateForPlaylist(
 		new Date().toISOString().replace("T", " ").slice(0, 19),
 	);
 
+	// Hoist token counts so the error path can persist partial cost data
+	// when the pipeline fails after LLM calls that consumed API credits
+	let extractTokensIn = 0;
+	let extractTokensOut = 0;
+	let convTokensIn = 0;
+	let convTokensOut = 0;
+
 	try {
 		// ── Step 1: Create generation record ──
 		await env.DB.prepare(
@@ -184,11 +192,7 @@ export async function generateForPlaylist(
 			lyricsFound: lyricsResults[i].found,
 		}));
 
-		const {
-			extractions,
-			inputTokens: extractTokensIn,
-			outputTokens: extractTokensOut,
-		} = await extractThemes(
+		const extractResult = await extractThemes(
 			tracksWithLyrics,
 			env.OPENAI_API_KEY,
 			// Real-time progress callback — fires after each track completes
@@ -215,6 +219,9 @@ export async function generateForPlaylist(
 				});
 			},
 		);
+		const { extractions } = extractResult;
+		extractTokensIn = extractResult.inputTokens;
+		extractTokensOut = extractResult.outputTokens;
 		console.log(
 			`[Pipeline] Extracted objects for ${extractions.length} tracks (${extractTokensIn}+${extractTokensOut} tokens)`,
 		);
@@ -261,8 +268,6 @@ export async function generateForPlaylist(
 		);
 
 		let convergence: Awaited<ReturnType<typeof convergeAndSelect>>["result"];
-		let convTokensIn: number;
-		let convTokensOut: number;
 
 		try {
 			const convResult = await convergeAndSelect(
@@ -426,7 +431,40 @@ export async function generateForPlaylist(
 			)
 			.run();
 
-		// 12d. Update generation record
+		// 12d. Update generation record (including cost tracking)
+		const costBreakdown = {
+			steps: [
+				{
+					step: "extract_themes",
+					model: LLM_MODEL,
+					input_tokens: extractTokensIn,
+					output_tokens: extractTokensOut,
+					cost_usd: calculateLLMCost(
+						LLM_MODEL,
+						extractTokensIn,
+						extractTokensOut,
+					),
+				},
+				{
+					step: "convergence",
+					model: LLM_MODEL,
+					input_tokens: convTokensIn,
+					output_tokens: convTokensOut,
+					cost_usd: calculateLLMCost(LLM_MODEL, convTokensIn, convTokensOut),
+				},
+				{
+					step: "image_generation",
+					model: style.replicate_model,
+					cost_usd: calculateImageCost(style.replicate_model),
+				},
+			],
+			total_usd: 0,
+		};
+		costBreakdown.total_usd = costBreakdown.steps.reduce(
+			(sum, s) => sum + s.cost_usd,
+			0,
+		);
+
 		await env.DB.prepare(
 			`UPDATE generations
 			 SET symbolic_object = ?,
@@ -436,7 +474,13 @@ export async function generateForPlaylist(
 				 analysis_id = ?,
 				 claimed_object_id = ?,
 				 status = 'completed',
-				 duration_ms = ?
+				 duration_ms = ?,
+				 model_name = ?,
+				 llm_input_tokens = ?,
+				 llm_output_tokens = ?,
+				 image_model = ?,
+				 cost_usd = ?,
+				 cost_breakdown = ?
 			 WHERE id = ?`,
 		)
 			.bind(
@@ -447,6 +491,12 @@ export async function generateForPlaylist(
 				analysisId,
 				claimedObjectId,
 				durationMs,
+				LLM_MODEL,
+				extractTokensIn + convTokensIn,
+				extractTokensOut + convTokensOut,
+				style.replicate_model,
+				costBreakdown.total_usd,
+				JSON.stringify(costBreakdown),
 				generationId,
 			)
 			.run();
@@ -473,7 +523,47 @@ export async function generateForPlaylist(
 			error instanceof Error ? error.message : "Unknown error";
 		console.error(`[Pipeline] Failed for "${playlist.name}":`, errorMessage);
 
-		// Record failed generation — nested try/catch to avoid double-fault
+		// Record failed generation — persist partial cost data if LLM calls were made
+		const totalTokensIn = extractTokensIn + convTokensIn;
+		const totalTokensOut = extractTokensOut + convTokensOut;
+		const hasPartialCost = totalTokensIn > 0 || totalTokensOut > 0;
+
+		let partialCostBreakdown: string | null = null;
+		let partialCostUsd = 0;
+		if (hasPartialCost) {
+			const steps: Array<Record<string, unknown>> = [];
+			if (extractTokensIn > 0 || extractTokensOut > 0) {
+				const cost = calculateLLMCost(
+					LLM_MODEL,
+					extractTokensIn,
+					extractTokensOut,
+				);
+				steps.push({
+					step: "extract_themes",
+					model: LLM_MODEL,
+					input_tokens: extractTokensIn,
+					output_tokens: extractTokensOut,
+					cost_usd: cost,
+				});
+				partialCostUsd += cost;
+			}
+			if (convTokensIn > 0 || convTokensOut > 0) {
+				const cost = calculateLLMCost(LLM_MODEL, convTokensIn, convTokensOut);
+				steps.push({
+					step: "convergence",
+					model: LLM_MODEL,
+					input_tokens: convTokensIn,
+					output_tokens: convTokensOut,
+					cost_usd: cost,
+				});
+				partialCostUsd += cost;
+			}
+			partialCostBreakdown = JSON.stringify({
+				steps,
+				total_usd: partialCostUsd,
+			});
+		}
+
 		try {
 			await env.DB.prepare(
 				`UPDATE generations
@@ -481,7 +571,12 @@ export async function generateForPlaylist(
 					 prompt = ?,
 					 status = 'failed',
 					 error_message = ?,
-					 duration_ms = ?
+					 duration_ms = ?,
+					 model_name = ?,
+					 llm_input_tokens = ?,
+					 llm_output_tokens = ?,
+					 cost_usd = ?,
+					 cost_breakdown = ?
 				 WHERE id = ?`,
 			)
 				.bind(
@@ -489,6 +584,11 @@ export async function generateForPlaylist(
 					style.prompt_template.replace("{subject}", playlist.name),
 					errorMessage,
 					Date.now() - startTime,
+					hasPartialCost ? LLM_MODEL : null,
+					hasPartialCost ? totalTokensIn : null,
+					hasPartialCost ? totalTokensOut : null,
+					hasPartialCost ? partialCostUsd : null,
+					partialCostBreakdown,
 					generationId,
 				)
 				.run();

@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { GenerationHistoryTable } from "@/components/dashboard/GenerationHistoryTable";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
-import { formatRelative } from "@/lib/format";
+import { formatTimestamp } from "@/lib/format";
 
 interface StyleRow {
 	id: string;
@@ -15,14 +16,6 @@ interface PlaylistStats {
 	generated: number;
 	needs_regen: number;
 	failed: number;
-}
-
-interface RecentGeneration {
-	id: string;
-	playlist_name: string;
-	symbolic_object: string;
-	status: string;
-	created_at: string;
 }
 
 interface UserRow {
@@ -48,7 +41,7 @@ async function getDashboardData(spotifyId: string) {
 	if (!user) return null;
 
 	try {
-		const [styleRows, statRows, recentRows, lastJobRows] = await Promise.all([
+		const [styleRows, statRows, lastJobRows, totalGenRows] = await Promise.all([
 			queryD1<StyleRow>(
 				"SELECT id, name, description FROM styles WHERE id = ? LIMIT 1",
 				[user.style_preference],
@@ -57,17 +50,12 @@ async function getDashboardData(spotifyId: string) {
 				`SELECT status, COUNT(*) as cnt FROM playlists WHERE user_id = ? GROUP BY status`,
 				[user.id],
 			),
-			queryD1<RecentGeneration>(
-				`SELECT g.id, p.name as playlist_name, g.symbolic_object, g.status, g.created_at
-				 FROM generations g
-				 JOIN playlists p ON g.playlist_id = p.id
-				 WHERE g.user_id = ?
-				 ORDER BY g.created_at DESC
-				 LIMIT 5`,
-				[user.id],
-			),
 			queryD1<JobRow>(
 				`SELECT status, completed_at, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 2`,
+				[user.id],
+			),
+			queryD1<{ cnt: number }>(
+				`SELECT COUNT(*) as cnt FROM generations WHERE user_id = ? AND status = 'completed'`,
 				[user.id],
 			),
 		]);
@@ -89,11 +77,13 @@ async function getDashboardData(spotifyId: string) {
 				stats.needs_regen += count;
 		}
 
+		const totalGenerations = Number(totalGenRows[0]?.cnt ?? 0);
+
 		return {
 			user,
 			style,
 			stats,
-			recentGenerations: recentRows,
+			totalGenerations,
 			lastJob: lastJobRows[0] ?? null,
 			previousJob: lastJobRows[1] ?? null,
 		};
@@ -103,7 +93,7 @@ async function getDashboardData(spotifyId: string) {
 			user,
 			style: null,
 			stats: { total: 0, generated: 0, needs_regen: 0, failed: 0 },
-			recentGenerations: [] as RecentGeneration[],
+			totalGenerations: 0,
 			lastJob: null,
 			previousJob: null,
 			fetchError: true,
@@ -135,7 +125,7 @@ export default async function DashboardPage() {
 		);
 	}
 
-	const { user, style, stats, recentGenerations, lastJob } = data;
+	const { user, style, stats, totalGenerations, lastJob } = data;
 
 	// Calculate next run time
 	const now = new Date();
@@ -150,7 +140,9 @@ export default async function DashboardPage() {
 
 	return (
 		<div className="flex flex-col gap-[var(--space-xl)]">
-			<h1 className="text-2xl font-bold">Overview</h1>
+			<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 bg-[var(--color-bg)] pb-[var(--space-md)] -mb-[var(--space-md)]">
+				<h1 className="text-2xl font-bold">Overview</h1>
+			</div>
 
 			{/* ── Active Style Card ── */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)]">
@@ -194,7 +186,7 @@ export default async function DashboardPage() {
 						/>
 						<span className="text-xs text-[var(--color-text-muted)]">
 							{lastJob?.completed_at
-								? formatRelative(lastJob.completed_at)
+								? formatTimestamp(lastJob.completed_at)
 								: "No runs yet"}
 						</span>
 						<span className="text-xs font-medium">
@@ -232,7 +224,7 @@ export default async function DashboardPage() {
 			</section>
 
 			{/* ── Playlist Summary Stats ── */}
-			<section className="grid grid-cols-2 gap-[var(--space-md)] sm:grid-cols-4">
+			<section className="grid grid-cols-2 gap-[var(--space-md)] sm:grid-cols-3 lg:grid-cols-5">
 				<StatCard label="Total" value={stats.total} />
 				<StatCard label="Generated" value={stats.generated} accent />
 				<StatCard
@@ -244,6 +236,12 @@ export default async function DashboardPage() {
 					label="Failed"
 					value={stats.failed}
 					error={stats.failed > 0}
+				/>
+				<StatCard
+					label="Total Images"
+					value={totalGenerations}
+					accent={totalGenerations > 0}
+					className="col-span-2 sm:col-span-1"
 				/>
 			</section>
 
@@ -273,50 +271,12 @@ export default async function DashboardPage() {
 				</Link>
 			</section>
 
-			{/* ── Recent Generations ── */}
+			{/* ── Generation History ── */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)]">
-				<div className="mb-[var(--space-md)] flex items-center justify-between">
-					<h2 className="text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
-						Recent Generations
-					</h2>
-					<Link
-						href="/playlists"
-						className="text-sm text-[var(--color-accent)] hover:underline"
-					>
-						View all playlists
-					</Link>
-				</div>
-
-				{recentGenerations.length === 0 ? (
-					<p className="text-sm text-[var(--color-text-muted)]">
-						No generations yet. The pipeline will run at {user.cron_time} UTC
-						daily.
-					</p>
-				) : (
-					<div className="flex flex-col divide-y divide-[var(--color-border-subtle)]">
-						{recentGenerations.map((gen) => (
-							<div
-								key={gen.id}
-								className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
-							>
-								<div className="flex flex-col gap-0.5">
-									<span className="text-sm font-medium">
-										{gen.playlist_name}
-									</span>
-									<span className="text-xs text-[var(--color-text-muted)]">
-										{gen.symbolic_object || "—"}
-									</span>
-								</div>
-								<div className="flex items-center gap-3">
-									<StatusBadge status={gen.status} />
-									<span className="text-xs text-[var(--color-text-faint)]">
-										{formatRelative(gen.created_at)}
-									</span>
-								</div>
-							</div>
-						))}
-					</div>
-				)}
+				<h2 className="mb-[var(--space-md)] text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+					Generation History
+				</h2>
+				<GenerationHistoryTable />
 			</section>
 		</div>
 	);
@@ -328,12 +288,14 @@ function StatCard({
 	accent,
 	warning,
 	error,
+	className,
 }: {
 	label: string;
 	value: number;
 	accent?: boolean;
 	warning?: boolean;
 	error?: boolean;
+	className?: string;
 }) {
 	let valueColor = "text-[var(--color-text)]";
 	if (accent && value > 0) valueColor = "text-[var(--color-accent)]";
@@ -341,30 +303,14 @@ function StatCard({
 	if (error) valueColor = "text-[var(--color-destructive)]";
 
 	return (
-		<div className="glass rounded-[var(--radius-md)] p-[var(--space-md)]">
+		<div
+			className={`glass rounded-[var(--radius-md)] p-[var(--space-md)] ${className ?? ""}`}
+		>
 			<p className="text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
 				{label}
 			</p>
 			<p className={`mt-1 text-2xl font-bold ${valueColor}`}>{value}</p>
 		</div>
-	);
-}
-
-function StatusBadge({ status }: { status: string }) {
-	const styles: Record<string, string> = {
-		completed: "bg-[var(--color-accent-muted)] text-[var(--color-accent)]",
-		failed:
-			"bg-[var(--color-destructive-muted)] text-[var(--color-destructive)]",
-		processing: "bg-[var(--color-info-muted)] text-[var(--color-info)]",
-		pending: "bg-[var(--color-surface)] text-[var(--color-text-muted)]",
-	};
-
-	return (
-		<span
-			className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-xs font-medium ${styles[status] ?? styles.pending}`}
-		>
-			{status}
-		</span>
 	);
 }
 
