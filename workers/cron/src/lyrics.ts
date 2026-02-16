@@ -59,10 +59,11 @@ export async function fetchLyrics(
 	}
 }
 
-interface TrackInfo {
+export interface TrackInfo {
 	name: string;
 	artist: string;
 	album: string;
+	spotifyTrackId: string;
 }
 
 interface BatchLyricsResult {
@@ -72,19 +73,78 @@ interface BatchLyricsResult {
 	found: boolean;
 }
 
+interface CachedLyrics {
+	spotify_track_id: string;
+	lyrics_snippet: string;
+}
+
 /**
  * Fetches lyrics for multiple tracks in parallel with concurrency limit.
+ * When a D1 database is provided, checks/populates the track_lyrics cache.
  */
 export async function fetchLyricsBatch(
 	tracks: TrackInfo[],
+	db?: D1Database,
 ): Promise<BatchLyricsResult[]> {
+	const results: BatchLyricsResult[] = new Array(tracks.length);
+
+	// ── Cache lookup ──
+	const uncachedIndices: number[] = [];
+
+	if (db && tracks.length > 0) {
+		try {
+			const ids = tracks.map((t) => t.spotifyTrackId);
+			const placeholders = ids.map(() => "?").join(",");
+			const cached = await db
+				.prepare(
+					`SELECT spotify_track_id, lyrics_snippet FROM track_lyrics WHERE spotify_track_id IN (${placeholders})`,
+				)
+				.bind(...ids)
+				.all<CachedLyrics>();
+
+			const cacheMap = new Map(
+				cached.results.map((r) => [r.spotify_track_id, r.lyrics_snippet]),
+			);
+
+			for (let i = 0; i < tracks.length; i++) {
+				const hit = cacheMap.get(tracks[i].spotifyTrackId);
+				if (hit !== undefined) {
+					results[i] = {
+						trackName: tracks[i].name,
+						artist: tracks[i].artist,
+						lyrics: hit,
+						found: true,
+					};
+				} else {
+					uncachedIndices.push(i);
+				}
+			}
+		} catch (err) {
+			console.warn("[Lyrics] Cache lookup failed, fetching all:", err);
+			// Fall through to fetch everything
+			uncachedIndices.length = 0;
+			for (let i = 0; i < tracks.length; i++) {
+				if (!results[i]) uncachedIndices.push(i);
+			}
+		}
+	} else {
+		for (let i = 0; i < tracks.length; i++) uncachedIndices.push(i);
+	}
+
+	if (uncachedIndices.length > 0) {
+		console.log(
+			`[Lyrics] Cache: ${tracks.length - uncachedIndices.length} hits, ${uncachedIndices.length} misses`,
+		);
+	}
+
+	// ── Fetch uncached from lyrics.ovh ──
 	const concurrency = CONFIG.LYRICS_CONCURRENCY;
-	const results: BatchLyricsResult[] = [];
-	let index = 0;
+	let fetchIdx = 0;
 
 	async function worker(): Promise<void> {
-		while (index < tracks.length) {
-			const i = index++;
+		while (fetchIdx < uncachedIndices.length) {
+			const fi = fetchIdx++;
+			const i = uncachedIndices[fi];
 			const track = tracks[i];
 			const result = await fetchLyrics(track.artist, track.name);
 			results[i] = {
@@ -97,10 +157,36 @@ export async function fetchLyricsBatch(
 	}
 
 	const workers = Array.from(
-		{ length: Math.min(concurrency, tracks.length) },
+		{ length: Math.min(concurrency, uncachedIndices.length) },
 		() => worker(),
 	);
 	await Promise.all(workers);
+
+	// ── Populate cache with newly fetched lyrics ──
+	if (db) {
+		const toCache = uncachedIndices.filter(
+			(i) => results[i].found && results[i].lyrics,
+		);
+		if (toCache.length > 0) {
+			try {
+				const stmts = toCache.map((i) =>
+					db
+						.prepare(
+							`INSERT OR IGNORE INTO track_lyrics (spotify_track_id, track_name, artist_name, lyrics_snippet) VALUES (?, ?, ?, ?)`,
+						)
+						.bind(
+							tracks[i].spotifyTrackId,
+							tracks[i].name,
+							tracks[i].artist,
+							results[i].lyrics,
+						),
+				);
+				await db.batch(stmts);
+			} catch (err) {
+				console.warn("[Lyrics] Cache write failed:", err);
+			}
+		}
+	}
 
 	return results;
 }
@@ -109,6 +195,8 @@ export async function fetchLyricsBatch(
  * Creates a fallback context string when lyrics aren't available.
  * Uses track name, artist, and album as context.
  */
-export function createFallbackContext(track: TrackInfo): string {
+export function createFallbackContext(
+	track: Pick<TrackInfo, "name" | "artist" | "album">,
+): string {
 	return `Track: "${track.name}" by ${track.artist} from album "${track.album}"`;
 }

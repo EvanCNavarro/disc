@@ -25,23 +25,37 @@ export async function chatCompletionJSON<T>(
 	userPrompt: string,
 	options?: ChatCompletionOptions,
 ): Promise<ChatCompletionResult<T>> {
-	const response = await fetch("https://api.openai.com/v1/chat/completions", {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${apiKey}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			model: "gpt-4o-mini",
-			messages: [
-				{ role: "system", content: systemPrompt },
-				{ role: "user", content: userPrompt },
-			],
-			response_format: { type: "json_object" },
-			temperature: options?.temperature ?? 0.7,
-			max_tokens: options?.maxTokens ?? 2000,
-		}),
-	});
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 30_000);
+
+	let response: Response;
+	try {
+		response = await fetch("https://api.openai.com/v1/chat/completions", {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "gpt-4o-mini",
+				messages: [
+					{ role: "system", content: systemPrompt },
+					{ role: "user", content: userPrompt },
+				],
+				response_format: { type: "json_object" },
+				temperature: options?.temperature ?? 0.7,
+				max_tokens: options?.maxTokens ?? 2000,
+			}),
+			signal: controller.signal,
+		});
+	} catch (error) {
+		if (error instanceof DOMException && error.name === "AbortError") {
+			throw new Error("OpenAI API request timed out after 30s");
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeoutId);
+	}
 
 	if (!response.ok) {
 		const errorText = await response.text();

@@ -23,12 +23,12 @@ interface TrackWithLyrics {
 }
 
 // ──────────────────────────────────────────────
-// Call 1: Batch extraction
+// Call 1: Per-track parallel extraction
 // ──────────────────────────────────────────────
 
-const EXTRACTION_SYSTEM_PROMPT = `You are a music analyst. Given a list of songs (with lyrics or metadata), extract symbolic objects that represent each song's themes.
+const SINGLE_TRACK_SYSTEM_PROMPT = `You are a music analyst. Given a single song (with lyrics or metadata), extract symbolic objects that represent the song's themes.
 
-For each track, identify 1-3 concrete, visual objects (nouns) that capture the song's essence. These should be things that could appear in cover art — not abstract concepts.
+Identify 1-3 concrete, visual objects (nouns) that capture the song's essence. These should be things that could appear in cover art — not abstract concepts.
 
 Tier each object:
 - "high": directly referenced in lyrics or strongly evoked
@@ -37,48 +37,117 @@ Tier each object:
 
 Respond with JSON:
 {
-  "extractions": [
-    {
-      "trackName": "...",
-      "artist": "...",
-      "lyricsFound": true/false,
-      "objects": [
-        { "object": "...", "tier": "high"|"medium"|"low", "reasoning": "..." }
-      ]
-    }
+  "trackName": "...",
+  "artist": "...",
+  "lyricsFound": true/false,
+  "objects": [
+    { "object": "...", "tier": "high"|"medium"|"low", "reasoning": "..." }
   ]
 }`;
 
-function buildExtractionPrompt(tracks: TrackWithLyrics[]): string {
-	const trackEntries = tracks.map((t, i) => {
-		const context = t.lyrics
-			? `Lyrics (truncated):\n${t.lyrics}`
-			: createFallbackContext(t);
-		return `Track ${i + 1}: "${t.name}" by ${t.artist}\n${context}`;
-	});
-
-	return `Analyze these ${tracks.length} tracks and extract symbolic objects for each:\n\n${trackEntries.join("\n\n---\n\n")}`;
+function buildSingleTrackPrompt(track: TrackWithLyrics): string {
+	const context = track.lyrics
+		? `Lyrics (truncated):\n${track.lyrics}`
+		: createFallbackContext(track);
+	return `Analyze this track and extract symbolic objects:\n\n"${track.name}" by ${track.artist}\n${context}`;
 }
 
+/**
+ * Extract themes for a single track via LLM.
+ */
+async function extractSingleTrack(
+	track: TrackWithLyrics,
+	apiKey: string,
+): Promise<{
+	extraction: TrackExtraction;
+	inputTokens: number;
+	outputTokens: number;
+}> {
+	const result = await chatCompletionJSON<TrackExtraction>(
+		apiKey,
+		SINGLE_TRACK_SYSTEM_PROMPT,
+		buildSingleTrackPrompt(track),
+		{ temperature: 0.6, maxTokens: 500 },
+	);
+
+	return {
+		extraction: result.parsed,
+		inputTokens: result.inputTokens,
+		outputTokens: result.outputTokens,
+	};
+}
+
+/**
+ * Extract themes for all tracks in parallel (concurrency-limited).
+ * Accepts an optional onProgress callback for real-time updates.
+ */
 export async function extractThemes(
 	tracks: TrackWithLyrics[],
 	apiKey: string,
+	onProgress?: (
+		completed: number,
+		total: number,
+		extractions: TrackExtraction[],
+		tokensUsed: number,
+	) => Promise<void> | void,
 ): Promise<{
 	extractions: TrackExtraction[];
 	inputTokens: number;
 	outputTokens: number;
 }> {
-	const result = await chatCompletionJSON<{ extractions: TrackExtraction[] }>(
-		apiKey,
-		EXTRACTION_SYSTEM_PROMPT,
-		buildExtractionPrompt(tracks),
-		{ temperature: 0.6, maxTokens: 2000 },
+	const CONCURRENCY = 5;
+	const extractions: (TrackExtraction | null)[] = new Array(tracks.length).fill(
+		null,
 	);
+	let totalInputTokens = 0;
+	let totalOutputTokens = 0;
+	let index = 0;
+
+	async function worker(): Promise<void> {
+		while (index < tracks.length) {
+			const i = index++;
+			const track = tracks[i];
+
+			try {
+				const result = await extractSingleTrack(track, apiKey);
+				extractions[i] = result.extraction;
+				totalInputTokens += result.inputTokens;
+				totalOutputTokens += result.outputTokens;
+			} catch (error) {
+				console.warn(`[Extraction] Failed for "${track.name}":`, error);
+				extractions[i] = {
+					trackName: track.name,
+					artist: track.artist,
+					lyricsFound: track.lyricsFound,
+					objects: [],
+				};
+			}
+
+			// Report progress after each track — await to avoid floating promises
+			const completed = extractions.filter((e) => e !== null);
+			try {
+				await onProgress?.(
+					completed.length,
+					tracks.length,
+					completed as TrackExtraction[],
+					totalInputTokens + totalOutputTokens,
+				);
+			} catch {
+				// Non-critical — don't fail extraction over progress reporting
+			}
+		}
+	}
+
+	const workers = Array.from(
+		{ length: Math.min(CONCURRENCY, tracks.length) },
+		() => worker(),
+	);
+	await Promise.all(workers);
 
 	return {
-		extractions: result.parsed.extractions,
-		inputTokens: result.inputTokens,
-		outputTokens: result.outputTokens,
+		extractions: extractions.filter((e): e is TrackExtraction => e !== null),
+		inputTokens: totalInputTokens,
+		outputTokens: totalOutputTokens,
 	};
 }
 
@@ -115,13 +184,19 @@ function buildConvergencePrompt(
 	extractions: TrackExtraction[],
 	exclusions: DbClaimedObject[],
 ): string {
+	// Only include high/medium tier objects — low tier adds noise without value
 	const objectSummary = extractions
 		.map((t) => {
-			const objs = t.objects
-				.map((o) => `  - ${o.object} (${o.tier}: ${o.reasoning})`)
+			const relevantObjs = t.objects.filter(
+				(o) => o.tier === "high" || o.tier === "medium",
+			);
+			if (relevantObjs.length === 0) return null;
+			const objs = relevantObjs
+				.map((o) => `  - ${o.object} (${o.tier})`)
 				.join("\n");
 			return `"${t.trackName}" by ${t.artist}:\n${objs}`;
 		})
+		.filter(Boolean)
 		.join("\n\n");
 
 	const exclusionList =
@@ -152,11 +227,24 @@ export async function convergeAndSelect(
 	inputTokens: number;
 	outputTokens: number;
 }> {
+	const userPrompt = buildConvergencePrompt(
+		playlistName,
+		extractions,
+		exclusions,
+	);
+	console.log(
+		`[Convergence] Prompt built: ${userPrompt.length} chars, ${extractions.length} tracks, ${exclusions.length} exclusions`,
+	);
+
 	const llmResult = await chatCompletionJSON<ConvergenceResult>(
 		apiKey,
 		CONVERGENCE_SYSTEM_PROMPT,
-		buildConvergencePrompt(playlistName, extractions, exclusions),
+		userPrompt,
 		{ temperature: 0.7, maxTokens: 1500 },
+	);
+
+	console.log(
+		`[Convergence] Got ${llmResult.parsed.candidates?.length ?? 0} candidates, selectedIndex=${llmResult.parsed.selectedIndex}`,
 	);
 
 	return {

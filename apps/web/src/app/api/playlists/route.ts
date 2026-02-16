@@ -5,6 +5,8 @@ import { queryD1 } from "@/lib/db";
 import { fetchUserPlaylists } from "@/lib/spotify";
 import { syncPlaylistsToD1 } from "@/lib/sync";
 
+const STALE_PROCESSING_MINUTES = 15;
+
 /** GET /api/playlists — fetch user's playlists from D1 */
 export async function GET() {
 	const session = await auth();
@@ -17,15 +19,78 @@ export async function GET() {
 		[session.spotifyId],
 	);
 	if (users.length === 0) {
-		return NextResponse.json({ playlists: [] });
+		return NextResponse.json({
+			playlists: [],
+			counts: { total: 0, completed: 0, processing: 0, pending: 0, failed: 0 },
+		});
 	}
 
-	const playlists = await queryD1<DbPlaylist>(
-		"SELECT * FROM playlists WHERE user_id = ? ORDER BY name ASC",
-		[users[0].id],
+	const userId = users[0].id;
+
+	// Reset stale processing playlists (stuck > 15 minutes)
+	// Normalize ISO timestamps (T separator → space, strip Z/ms) for SQLite datetime comparison
+	// Handles both new format ($.startedAt) and old format ($.started_at)
+	await queryD1(
+		`UPDATE playlists
+		 SET status = 'idle', progress_data = NULL
+		 WHERE user_id = ? AND status = 'processing'
+		   AND progress_data IS NOT NULL
+		   AND replace(replace(substr(
+		     COALESCE(json_extract(progress_data, '$.startedAt'), json_extract(progress_data, '$.started_at')),
+		     1, 19), 'T', ' '), 'Z', '') < datetime('now', ?)`,
+		[userId, `-${STALE_PROCESSING_MINUTES} minutes`],
 	);
 
-	return NextResponse.json({ playlists });
+	// Reset stale queued playlists (stuck > 15 minutes — worker likely crashed)
+	await queryD1(
+		`UPDATE playlists
+		 SET status = 'idle', progress_data = NULL
+		 WHERE user_id = ? AND status = 'queued'
+		   AND progress_data IS NOT NULL
+		   AND replace(replace(substr(
+		     json_extract(progress_data, '$.queuedAt'),
+		     1, 19), 'T', ' '), 'Z', '') < datetime('now', ?)`,
+		[userId, `-${STALE_PROCESSING_MINUTES} minutes`],
+	);
+
+	// Also clean up orphaned generation records (worker crashed before error handler ran)
+	await queryD1(
+		`UPDATE generations
+		 SET status = 'failed', error_message = 'Worker terminated unexpectedly'
+		 WHERE user_id = ? AND status = 'processing'
+		   AND created_at < datetime('now', ?)`,
+		[userId, `-${STALE_PROCESSING_MINUTES} minutes`],
+	);
+
+	const playlists = await queryD1<
+		DbPlaylist & { latest_r2_key: string | null }
+	>(
+		`SELECT p.*,
+			(SELECT g.r2_key FROM generations g
+			 WHERE g.playlist_id = p.id AND g.status = 'completed'
+			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key
+		 FROM playlists p
+		 WHERE p.user_id = ? ORDER BY p.name ASC`,
+		[userId],
+	);
+
+	// Compute status counts
+	const counts = {
+		total: playlists.length,
+		completed: 0,
+		processing: 0,
+		pending: 0,
+		failed: 0,
+	};
+	for (const p of playlists) {
+		if (p.status === "generated") counts.completed++;
+		else if (p.status === "processing" || p.status === "queued")
+			counts.processing++;
+		else if (p.status === "failed") counts.failed++;
+		else counts.pending++;
+	}
+
+	return NextResponse.json({ playlists, counts });
 }
 
 /** POST /api/playlists — sync playlists from Spotify to D1 */

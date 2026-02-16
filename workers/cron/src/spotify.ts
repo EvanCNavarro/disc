@@ -95,6 +95,7 @@ export async function uploadPlaylistCover(
 }
 
 export interface PlaylistTrack {
+	spotifyTrackId: string;
 	name: string;
 	artist: string;
 	album: string;
@@ -102,16 +103,15 @@ export interface PlaylistTrack {
 
 /**
  * Fetches tracks for a Spotify playlist.
- * Uses fields param to minimize response size.
+ * Uses the /tracks sub-resource for paginated track access.
  */
 export async function fetchPlaylistTracks(
 	spotifyPlaylistId: string,
 	accessToken: string,
 	limit: number = CONFIG.MAX_TRACKS_PER_PLAYLIST,
 ): Promise<PlaylistTrack[]> {
-	// Feb 2026 Spotify API: items (not tracks)
-	const fields = "items(item(name,artists(name),album(name)))";
-	const url = `https://api.spotify.com/v1/playlists/${spotifyPlaylistId}?fields=${encodeURIComponent(fields)}&limit=${limit}`;
+	const fields = "items(track(id,name,artists(name),album(name)))";
+	const url = `https://api.spotify.com/v1/playlists/${spotifyPlaylistId}/tracks?fields=${encodeURIComponent(fields)}&limit=${limit}`;
 
 	const response = await fetch(url, {
 		headers: { Authorization: `Bearer ${accessToken}` },
@@ -125,41 +125,30 @@ export async function fetchPlaylistTracks(
 	}
 
 	const data = (await response.json()) as {
-		items?: Array<{
-			item: {
+		items: Array<{
+			track: {
+				id: string;
 				name: string;
 				artists: Array<{ name: string }>;
 				album: { name: string };
-			};
+			} | null;
 		}>;
-		// Legacy field name fallback
-		tracks?: {
-			items: Array<{
-				track: {
-					name: string;
-					artists: Array<{ name: string }>;
-					album: { name: string };
-				};
-			}>;
-		};
 	};
 
-	// Handle both Feb 2026 (items) and legacy (tracks) field names
-	if (data.items) {
-		return data.items.slice(0, limit).map((item) => ({
-			name: item.item.name,
-			artist: item.item.artists.map((a) => a.name).join(", "),
-			album: item.item.album.name,
-		}));
+	if (!data.items) {
+		return [];
 	}
 
-	if (data.tracks?.items) {
-		return data.tracks.items.slice(0, limit).map((item) => ({
+	return data.items
+		.filter(
+			(item): item is { track: NonNullable<(typeof item)["track"]> } =>
+				item.track !== null,
+		)
+		.slice(0, limit)
+		.map((item) => ({
+			spotifyTrackId: item.track.id,
 			name: item.track.name,
 			artist: item.track.artists.map((a) => a.name).join(", "),
 			album: item.track.album.name,
 		}));
-	}
-
-	return [];
 }

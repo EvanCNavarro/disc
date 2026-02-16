@@ -2,6 +2,7 @@
 
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
+	DashboardSquare02Icon,
 	Playlist01Icon,
 	Settings02Icon,
 } from "@hugeicons-pro/core-stroke-rounded";
@@ -19,6 +20,17 @@ export function NavItems() {
 				active={pathname.startsWith("/playlists")}
 			>
 				<HugeiconsIcon icon={Playlist01Icon} size={14} strokeWidth={1.5} />
+			</NavItem>
+			<NavItem
+				href="/queue"
+				label="Queue"
+				active={pathname.startsWith("/queue")}
+			>
+				<HugeiconsIcon
+					icon={DashboardSquare02Icon}
+					size={14}
+					strokeWidth={1.5}
+				/>
 			</NavItem>
 			<NavItem
 				href="/settings"

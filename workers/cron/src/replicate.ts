@@ -23,6 +23,7 @@ async function getLatestVersion(
 ): Promise<string> {
 	const response = await fetch(`${REPLICATE_API_BASE}/models/${model}`, {
 		headers: { Authorization: `Bearer ${apiToken}` },
+		signal: AbortSignal.timeout(15_000),
 	});
 
 	if (!response.ok) {
@@ -42,15 +43,31 @@ async function createPrediction(
 	input: Record<string, unknown>,
 	apiToken: string,
 ): Promise<ReplicatePrediction> {
-	const response = await fetch(`${REPLICATE_API_BASE}/predictions`, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${apiToken}`,
-			"Content-Type": "application/json",
-			Prefer: "wait",
-		},
-		body: JSON.stringify({ version, input }),
-	});
+	const controller = new AbortController();
+	const timeoutId = setTimeout(() => controller.abort(), 60_000);
+
+	let response: Response;
+	try {
+		response = await fetch(`${REPLICATE_API_BASE}/predictions`, {
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${apiToken}`,
+				"Content-Type": "application/json",
+				Prefer: "wait",
+			},
+			body: JSON.stringify({ version, input }),
+			signal: controller.signal,
+		});
+	} catch (error) {
+		if (error instanceof DOMException && error.name === "AbortError") {
+			throw new Error(
+				"Replicate prediction request timed out after 60s (cold start too long)",
+			);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timeoutId);
+	}
 
 	if (!response.ok) {
 		const errorBody = await response.text();

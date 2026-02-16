@@ -9,7 +9,7 @@
 
 ## 1. Project Overview
 
-DISC generates AI-powered playlist cover art for Spotify. Users authenticate with Spotify, select playlists, and DISC analyzes track lyrics/metadata to extract a symbolic theme, generates a DALL-E 3 image in a chosen art style, compresses it to meet Spotify's requirements, and uploads it as the playlist cover. This can run manually or on a nightly schedule.
+DISC generates AI-powered playlist cover art for Spotify. Users authenticate with Spotify, select playlists, and DISC analyzes track lyrics/metadata to extract a symbolic theme, generates a Replicate Flux Schnell image in a chosen art style, compresses it to meet Spotify's requirements, and uploads it as the playlist cover. This can run manually or on a nightly schedule.
 
 ### 1.1 Goals
 
@@ -43,7 +43,7 @@ DISC generates AI-powered playlist cover art for Spotify. Users authenticate wit
 | **Queue** | CF Queues | — | Per-playlist fan-out with retries. |
 | **Image Compression** | @cf-wasm/photon | 0.1.x | WASM. PNG→JPEG at quality 40. Proven <256KB output. |
 | **AI: Theme** | OpenAI GPT-4o-mini | — | Symbolic object extraction from lyrics/metadata. |
-| **AI: Image** | OpenAI DALL-E 3 | — | 1024x1024 standard. $0.04/generation. |
+| **AI: Image** | Replicate Flux Schnell | — | 1024x1024 via LoRA. ~$0.0025/generation. |
 | **Lyrics** | lyrics.ovh | v1 | Free API. Non-blocking fallback to metadata. |
 | **Styling** | Tailwind CSS | 4.x | PostCSS plugin. CSS custom properties for tokens. |
 | **Linting** | Biome | 2.x | Replaces ESLint + Prettier. Tabs, double quotes. |
@@ -76,8 +76,8 @@ DISC generates AI-powered playlist cover art for Spotify. Users authenticate wit
                                  │            │
                            ┌─────┼─────┬──────┐
                            │     │     │      │
-                        lyrics  GPT  DALL-E  Photon
-                        .ovh   4o-m   3     compress
+                        lyrics  GPT  Replicate Photon
+                        .ovh   4o-m  Flux    compress
                                               │
                                         Spotify PUT
                                         /images
@@ -99,7 +99,7 @@ disc/
 ├── packages/shared/             # Shared across web + worker
 │   └── src/
 │       ├── types.ts             # DB types, Spotify types, enums
-│       ├── styles.ts            # Art style definitions + DALL-E prompt blocks
+│       ├── styles.ts            # Art style definitions + Replicate prompt blocks
 │       └── version.ts           # APP_VERSION source of truth
 ├── migrations/                  # D1 SQL migration files
 ├── scripts/                     # version-bump.sh, version-check.sh
@@ -122,7 +122,7 @@ disc/
    c. Fetch lyrics for top N tracks (lyrics.ovh, parallel, 5s timeout each)
    d. Extract symbolic objects (GPT-4o-mini, per-track)
    e. Select final theme (GPT-4o-mini, considers all objects + playlist context)
-   f. Generate image (DALL-E 3, style prompt from user preference)
+   f. Generate image (Replicate Flux Schnell, style prompt from user preference)
    g. Fetch PNG → compress to JPEG <256KB (Photon WASM)
    h. Upload to Spotify (PUT /v1/playlists/{id}/images, base64 JPEG)
    i. Update generation record (status: completed, cost, duration)
@@ -192,12 +192,12 @@ Cloudflare D1 (SQLite). See `migrations/001_initial.sql` for full DDL.
 | playlist_id, user_id | TEXT FK | |
 | style_id | TEXT | Which art style was used |
 | symbolic_object | TEXT | The chosen theme object |
-| dall_e_prompt | TEXT | Full prompt sent to DALL-E |
+| prompt | TEXT | Full prompt sent to Replicate |
 | image_url | TEXT | R2 URL or Spotify URL |
 | status | TEXT | pending/processing/completed/failed |
 | error_message | TEXT | Nullable |
 | duration_ms | INTEGER | Total pipeline time |
-| cost_usd | REAL | GPT + DALL-E cost |
+| cost_usd | REAL | GPT + Replicate cost |
 | trigger_type | TEXT | manual/cron |
 
 **jobs**
@@ -239,7 +239,7 @@ All code must use updated field names:
 | 5 | `neon-noir` | Neon Noir | Dark background with neon accents |
 | 6 | `watercolor-dream` | Watercolor Dream | Soft, bleeding edges |
 
-Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase 3.
+Style 1 is fully defined with Replicate prompt block. Styles 2-6 are added in Phase 3.
 
 ---
 
@@ -270,7 +270,7 @@ Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase
 |---|------|---------|--------|
 | 1.1 | Auth.js config with Spotify provider | `src/lib/auth.ts`, `src/app/api/auth/[...nextauth]/route.ts` | |
 | 1.2 | D1 access layer (CF REST API from Vercel) | `src/lib/db.ts` | |
-| 1.3 | AES-256-GCM encryption (port from KGOSPCG) | `src/lib/encryption.ts` | |
+| 1.3 | AES-256-GCM encryption | `src/lib/encryption.ts` | |
 | 1.4 | Spotify API helpers (fetch playlists, paginated) | `src/lib/spotify.ts` | |
 | 1.5 | Auth middleware (protect /dashboard/*) | `src/middleware.ts` | |
 | 1.6 | Login page with Spotify button | `src/app/login/page.tsx` | |
@@ -304,13 +304,13 @@ Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase
 | # | Task | File(s) | Status |
 |---|------|---------|--------|
 | 2.1 | Generation pipeline orchestrator | `workers/cron/src/pipeline.ts` | |
-| 2.2 | Spotify service (fetch tracks, upload cover) | `workers/cron/src/services/spotify.ts` | |
-| 2.3 | Lyrics fetcher (lyrics.ovh) | `workers/cron/src/services/lyrics.ts` | |
-| 2.4 | Theme extractor (GPT-4o-mini) | `workers/cron/src/services/theme-extractor.ts` | |
-| 2.5 | Image generator (DALL-E 3 + Photon) | `workers/cron/src/services/image-generator.ts` | |
-| 2.6 | Token refresh service | `workers/cron/src/services/token-refresh.ts` | |
-| 2.7 | Retry utility (port from KGOSPCG) | `workers/cron/src/utils/retry.ts` | |
-| 2.8 | Cost tracker (port from KGOSPCG) | `workers/cron/src/utils/metrics.ts` | |
+| 2.2 | Spotify service (fetch tracks, upload cover) | `workers/cron/src/spotify.ts` | |
+| 2.3 | Lyrics fetcher (lyrics.ovh) | `workers/cron/src/lyrics.ts` | |
+| 2.4 | Theme extractor (GPT-4o-mini) | `workers/cron/src/theme-extractor.ts` | |
+| 2.5 | Image generator (Replicate Flux Schnell + Photon) | `workers/cron/src/image-generator.ts` | |
+| 2.6 | Token refresh service | `workers/cron/src/token-refresh.ts` | |
+| 2.7 | Retry utility | `workers/cron/src/retry.ts` | |
+| 2.8 | Cost tracker | `workers/cron/src/metrics.ts` | |
 | 2.9 | Generate API endpoint | `apps/web/src/app/api/generate/[playlistId]/route.ts` | |
 | 2.10 | GenerateButton + GenerationStatus components | `apps/web/src/components/Generate*.tsx` | |
 
@@ -318,7 +318,7 @@ Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase
 - [ ] Click Generate → worker fetches tracks from Spotify
 - [ ] Lyrics fetched for available tracks (non-blocking failures)
 - [ ] Theme extracted via GPT-4o-mini (JSON response parsed correctly)
-- [ ] DALL-E 3 generates 1024x1024 image
+- [ ] Replicate Flux Schnell generates 1024x1024 image
 - [ ] Photon compresses PNG → JPEG <256KB
 - [ ] Compressed image uploaded to Spotify successfully
 - [ ] New cover visible on Spotify within 30 seconds
@@ -328,7 +328,7 @@ Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase
 **Success metrics**:
 - Full pipeline completes in <60s
 - Compressed JPEG consistently <256KB
-- Cost per generation: ~$0.04-0.05 (DALL-E $0.04 + GPT pennies)
+- Cost per generation: ~$0.04-0.05 (Replicate $0.04 + GPT pennies)
 - Lyrics found for >50% of tracks
 
 ---
@@ -422,28 +422,22 @@ Style 1 is fully defined with DALL-E prompt block. Styles 2-6 are added in Phase
 
 ---
 
-## 8. What Gets Ported from KGOSPCG
+## 8. Module Origins
 
-| Source (KGOSPCG) | Target (DISC) | Changes |
-|------------------|---------------|---------|
-| `workers/services/image-generation.service.ts` | `workers/cron/src/services/image-generator.ts` | Parameterize style prompt (was hardcoded) |
-| `workers/services/theme-extraction.service.ts` | `workers/cron/src/services/theme-extractor.ts` | None — clean fetch() calls |
-| `workers/services/lyrics.service.ts` | `workers/cron/src/services/lyrics.ts` | Drop AudD fallback (expired Nov 2025) |
-| `workers/services/spotify-upload.service.ts` | `workers/cron/src/services/spotify.ts` | Fix Feb 2026 field renames |
-| `workers/utils/retry.ts` | `workers/cron/src/utils/retry.ts` | None |
-| `workers/utils/metrics.ts` | `workers/cron/src/utils/metrics.ts` | None |
-| `workers/types.ts` | `packages/shared/src/types.ts` | Update Spotify field names, add DB types |
-| `app/lib/encryption.server.ts` | `apps/web/src/lib/encryption.ts` | Port as-is |
+All modules in DISC are standalone. Key implementation notes:
 
-### Do NOT Port
-
-| File | Why |
-|------|-----|
-| `app/lib/services/image-compressor.service.ts` | Placeholder, never implemented |
-| `app/lib/services/openai.service.ts` | Uses `openai` npm, not edge-compatible |
-| `app/lib/services/storage.service.ts` | R2 was never configured |
-| `app/types/database.ts` | Stale, doesn't match schema |
-| All Clerk auth code | Replaced by Auth.js |
+| Module | File(s) | Notes |
+|--------|---------|-------|
+| Image generation | `workers/cron/src/image-generator.ts` | Parameterized style prompt |
+| Theme extraction | `workers/cron/src/theme-extractor.ts` | Clean fetch() calls |
+| Lyrics fetcher | `workers/cron/src/lyrics.ts` | No AudD fallback (expired Nov 2025) |
+| Spotify upload | `workers/cron/src/spotify.ts` | Feb 2026 field names |
+| Retry utility | `workers/cron/src/retry.ts` | Exponential backoff |
+| Cost tracker | `workers/cron/src/metrics.ts` | Per-generation cost logging |
+| Shared types | `packages/shared/src/types.ts` | Spotify + DB types |
+| Encryption | `apps/web/src/lib/encryption.ts` | AES-256-GCM for refresh tokens |
+| Shared types | `packages/shared/src/types.ts` | Spotify + DB types (source of truth) |
+| Auth | Auth.js v5 | Spotify OAuth, single-user gate |
 
 ---
 
@@ -504,10 +498,10 @@ D1 and R2 are bound via wrangler.toml, not env vars.
 |------|--------|------------|------------|
 | Spotify Dev Mode 5-user limit | Can't scale beyond 5 users | Certain | Apply for Extended Quota when ready |
 | lyrics.ovh goes down | Worse theme extraction | Medium | Metadata fallback (extractObjectFromMetadata) still works |
-| DALL-E cost at scale | 50 playlists x $0.04 = $2/night | Low (personal use) | Track costs in generations table, add budget caps |
+| Replicate cost at scale | 50 playlists x $0.0025 = ~$0.13/night | Low (personal use) | Track costs in generations table, add budget caps |
 | Token revocation | Cron fails silently | Medium | Detect 401, disable cron, show reconnect banner |
 | D1 migration breaking changes | Data loss | Low | Raw SQL migrations, no ORM magic. Test locally first. |
-| Photon WASM memory limits | Compression fails | Low | 128MB Worker memory. DALL-E PNGs are ~2-4MB. Proven in KGOSPCG. |
+| Photon WASM memory limits | Compression fails | Low | 128MB Worker memory. Replicate PNGs are ~2-4MB. Tested and verified. |
 | Spotify API field renames | 404/500 errors | Already happened | All types use Feb 2026 field names |
 
 ---
@@ -519,9 +513,9 @@ D1 and R2 are bound via wrangler.toml, not env vars.
 | Cloudflare Workers (paid plan) | Cron + generation | $5.00 |
 | Cloudflare D1 | Included in Workers plan | $0.00 |
 | Cloudflare R2 | <10GB storage, zero egress | $0.00 |
-| OpenAI DALL-E 3 | 50 images/day x 30 days | ~$60.00 |
+| Replicate Flux Schnell | 50 images/day x 30 days | ~$3.75 |
 | OpenAI GPT-4o-mini | Theme extraction | ~$0.50 |
 | Vercel | Hobby plan | $0.00 |
-| **Total** | | **~$65.50/mo** |
+| **Total** | | **~$9.25/mo** |
 
-DALL-E is 92% of the cost. Reducing to 20 playlists/day → ~$25/mo.
+Replicate Flux Schnell is ~$0.0025/image, dramatically cheaper than DALL-E 3.

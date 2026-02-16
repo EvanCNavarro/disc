@@ -11,6 +11,7 @@ export function LogoLink({ href }: { href: string }) {
 	// Active on home and any sub-page not owned by another nav item
 	const isActive =
 		!pathname.startsWith("/playlists") &&
+		!pathname.startsWith("/queue") &&
 		!pathname.startsWith("/settings") &&
 		!pathname.startsWith("/login");
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
+import { formatRelative } from "@/lib/format";
 
 interface StyleRow {
 	id: string;
@@ -193,7 +194,7 @@ export default async function DashboardPage() {
 						/>
 						<span className="text-xs text-[var(--color-text-muted)]">
 							{lastJob?.completed_at
-								? formatRelativeTime(lastJob.completed_at)
+								? formatRelative(lastJob.completed_at)
 								: "No runs yet"}
 						</span>
 						<span className="text-xs font-medium">
@@ -246,6 +247,32 @@ export default async function DashboardPage() {
 				/>
 			</section>
 
+			{/* ── Quick Actions ── */}
+			<section className="grid grid-cols-2 gap-[var(--space-md)]">
+				<Link
+					href="/queue"
+					className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)] transition-all hover:shadow-[var(--shadow-md)]"
+				>
+					<h2 className="text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+						Queue
+					</h2>
+					<p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+						Batch generate covers for your playlists
+					</p>
+				</Link>
+				<Link
+					href="/playlists"
+					className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)] transition-all hover:shadow-[var(--shadow-md)]"
+				>
+					<h2 className="text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+						Playlists
+					</h2>
+					<p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+						View and manage your Spotify playlists
+					</p>
+				</Link>
+			</section>
+
 			{/* ── Recent Generations ── */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)]">
 				<div className="mb-[var(--space-md)] flex items-center justify-between">
@@ -283,7 +310,7 @@ export default async function DashboardPage() {
 								<div className="flex items-center gap-3">
 									<StatusBadge status={gen.status} />
 									<span className="text-xs text-[var(--color-text-faint)]">
-										{formatRelativeTime(gen.created_at)}
+										{formatRelative(gen.created_at)}
 									</span>
 								</div>
 							</div>
@@ -339,21 +366,6 @@ function StatusBadge({ status }: { status: string }) {
 			{status}
 		</span>
 	);
-}
-
-function formatRelativeTime(dateStr: string): string {
-	const date = new Date(dateStr);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffMins = Math.floor(diffMs / 60_000);
-	const diffHours = Math.floor(diffMs / 3_600_000);
-	const diffDays = Math.floor(diffMs / 86_400_000);
-
-	if (diffMins < 1) return "just now";
-	if (diffMins < 60) return `${diffMins}m ago`;
-	if (diffHours < 24) return `${diffHours}h ago`;
-	if (diffDays < 7) return `${diffDays}d ago`;
-	return date.toLocaleDateString();
 }
 
 function formatNextRun(date: Date): string {

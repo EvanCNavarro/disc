@@ -1,9 +1,120 @@
 # DISC — Build Plan
 
-> **Current version**: 0.5.0 (changelog + footer + unread indicator)
-> **Phase 3**: Complete — pipeline, dashboard, settings, deployed to disc.400.dev
-> **Phase 3.5**: Complete — changelog page, structured changelog.json, footer, unread tracking, breadcrumbs
-> **Phase 4**: Not started — playlist detail, image serving, manual triggers (Tier 1 below)
+> **Current version**: 0.6.0
+> **Phase 4**: In progress — queue UI, manual triggers, worker auth (B8 complete, B1/B4 remaining)
+
+---
+
+## Completed Phases
+
+### Phase 0 — Scaffolding (v0.1.0)
+**Commit**: `dc902ca` feat: phase 0 scaffolding — monorepo, CI, versioning
+
+- Monorepo: `apps/web`, `workers/cron`, `packages/shared`
+- Next.js 16 + Tailwind v4 + DISC design tokens
+- CF Worker stub with D1 binding
+- Shared types (Spotify Feb 2026 compliant), styles, version module
+- D1 migration: `users`, `playlists`, `generations`, `jobs` tables
+- Biome linting + formatting
+- GitHub Actions CI (lint + typecheck) — **NOT YET CREATED** (`.github/workflows/` does not exist)
+- Version management: `version-bump.sh`, `version-check.sh` pre-push gate
+- Husky hooks: pre-commit (lint-staged), commit-msg (commitlint), pre-push (version + lint + typecheck)
+
+### Phase 1 — Auth + Playlists (v0.2.0)
+**Commit**: `88b9576` feat: phase 1 — Auth.js + Spotify playlists
+
+- Auth.js v5 (beta.30) with Spotify OAuth provider
+- Single-user gate: only `evancnavarro` can sign in
+- AES-256-GCM encrypted refresh token storage in D1
+- D1 REST API access layer (`queryD1()` — Vercel can't bind D1 natively)
+- Spotify API helpers: fetch playlists with pagination
+- Dashboard layout with auth middleware protection
+- Playlist grid with Spotify cover thumbnails
+- Playlist sync: Spotify → D1 via `after()` callback
+- Edge Runtime split: `auth.config.ts` (Edge-safe) / `auth.ts` (Node with crypto)
+
+### Phase 2 — Design System (v0.3.0)
+**Commit**: `05e4141` feat(ui): design system overhaul — NavDock, DiscLogo, glassmorphism
+
+- 4-concentric-ring DiscLogo (15-unit math, `box-sizing: border-box`, `currentColor`)
+- Glassmorphism: `--glass-bg/blur/border/shadow` tokens, `.glass` utility class
+- Spotify green aura: `--aura-color/gradient` tokens, `.aura` utility class
+- Text hierarchy with WCAG contrast: primary 15:1, secondary 7.8:1, muted 4.7:1
+- Global focus-visible: Spotify green outline on all interactive elements
+- Skip-to-content link for keyboard navigation
+- NavDock (server component, calls `auth()`) + UserDropdown (client component)
+
+### Phase 3 — Pipeline + Dashboard (v0.4.0)
+**Commits**:
+- `fcc868a` feat: phase 3 — Enhanced pipeline, dashboard, settings
+- `bab3256` fix(auth): break redirect loop on expired Spotify token
+- `ff7c191` fix(config): use .next.nosync distDir only in development
+- `2c51f60` fix(auth): resolve typecheck error in jwt callback type
+- `cdc3f81` chore: add .vercel to gitignore and use optional chaining in jwt callback
+- `54f6eb6` feat(styles): expand catalog with 5 new style definitions
+
+- Full image generation pipeline: lyrics → tiered object extraction → collision-aware convergence → Replicate Flux Schnell generation
+- 9 worker modules: crypto, image, replicate, spotify, pipeline, lyrics, openai, extraction, index
+- GPT-4o-mini batch extraction + convergence (2 LLM calls per playlist, ~$0.002 total)
+- Collision detection: cross-playlist claimed objects registry with supersede logic
+- Change detection: tiered thresholds (50% for ≤2 tracks, 33% for 3, 25% for 4+)
+- @cf-wasm/photon JPEG compression for Spotify upload (<192KB)
+- lyrics.ovh integration with 5s timeout, concurrency 5, metadata fallback
+- D1 schema: `styles`, `playlist_analyses`, `claimed_objects` tables; `generations` audit columns
+- Dashboard overview: active style card, pipeline timeline, playlist stats, recent generations
+- Settings page: schedule, style selector, account management
+- NavItems with active state indicator (`aria-current="page"`)
+- R2 image archival with structured key paths
+- AES-256-GCM encryption via Web Crypto API (worker-compatible)
+- 6 art styles: Bleached Crosshatch + 5 new (Neon Noir, Soft Watercolor, Brutalist Collage, Chromatic Glass, Ukiyo-e Wave)
+- Deployed to disc.400.dev with Spotify OAuth, TLS, all worker secrets
+
+### Phase 3.5 — Changelog + Transparency (v0.5.0)
+**Commits**:
+- `73e67d3` feat(changelog): add searchable changelog page with version tracking
+- `1b8302d` feat(changelog): add footer, unread indicator, breadcrumbs, seen tracking
+- `7197c34` chore: update BUILDPLAN.md version strategy and changelog entries
+
+- Changelog page at `/changelog` with search, fuzzy word matching, highlighted results
+- Structured `changelog.json` in `packages/shared` with types and utilities
+- "What's New?" menu item in UserDropdown (auth only) with unread dot; Footer changelog link visible on all pages (auth + unauth)
+- Footer with 400 Faces branding, version badge, changelog link
+- Pulsing blue unread indicator on user avatar when new entries exist
+- "What's New" menu item in user dropdown with unread dot
+- Auto-mark changelog as seen on visit, per-user D1 tracking
+- Breadcrumb navigation (Home > Changelog)
+- `version-bump.sh` scaffolds `changelog.json` entries automatically
+
+### Phase 3.75 — UI Polish (v0.5.1)
+**Commit**: `88193b7` feat(ui): design system polish + login page redesign (v0.5.1)
+
+- Universal button standard: `px-3 py-2 text-xs font-medium` (32px height) across all components
+- Login page redesign: breathing DISC logo background (`DiscRipples`), "Welcome to DISC" heading, large Spotify CTA button (only exception to button standard)
+- FooterLogo: DISC logo ghost button with green fireworks easter egg (`fireworks-js`)
+- Changelog badge in footer: combined "Changelog v0.5.1 →" link
+- Max-width standardized to 1280px (`max-w-7xl`) across dashboard, changelog, and footer
+- BackToTop component: only renders on scrollable pages (ResizeObserver)
+- Lighter skeleton loader (3 placeholders instead of 15)
+- `staleTimes` RSC caching (30s dynamic) for instant back/forward navigation
+- `.gitignore` fix: `.next*/` catches stale `.next 2/` directories
+- Breathing animation: 18 DISC logos at varying sizes (22–200px), opacity 0.08–0.18, negative delays for instant presence, avoiding center hero zone and footer
+
+### Phase 4A — Queue + Manual Generation (v0.6.0)
+
+Port of manual generation queue from KGOSPCG, adapted to DISC's Auth.js + D1 REST API patterns.
+
+- Worker `/trigger` endpoint: POST-only + bearer token auth (`WORKER_AUTH_TOKEN`)
+- Worker pipeline: revision notes support, progress tracking (`progress_data` on playlists), trigger type tracking
+- Migration 004: `dall_e_prompt` → `prompt` column rename, `progress_data` column on playlists
+- Shared types: `PlaylistProgress` interface, `DbGeneration.prompt` rename
+- API routes: `POST /api/playlists/generate-batch`, `POST /api/playlists/[id]/regenerate`, `GET /api/generations`, `GET /api/styles`
+- Updated `GET /api/playlists`: stale processing detection (5min timeout), status counts
+- Queue UI: `QueueBoard` (3-column kanban), `QueueCard` (progress bar, step labels), `StylePicker`, `ImageReviewModal` (native `<dialog>`)
+- Queue page at `/queue` with nav integration
+- Dashboard: quick action cards linking to Queue and Playlists
+- SPEC.md cleanup: DALL-E 3 → Replicate Flux Schnell, fixed file paths, removed Clerk references
+
+---
 
 Phase 3 built the pipeline (lyrics → extraction → convergence → image) and the dashboard overview. Phase 3.5 adds the **transparency layer**: every piece of data the pipeline produces should be visible, navigable, and actionable from the UI.
 
@@ -13,24 +124,56 @@ Phase 3 built the pipeline (lyrics → extraction → convergence → image) and
 
 ```
 apps/web/src/
-├── app/(dashboard)/
-│   ├── page.tsx                     # Dashboard overview (exists)
-│   ├── playlists/
-│   │   ├── page.tsx                 # Playlist grid (exists)
-│   │   └── [slug]/                  # ← NEW: Playlist detail page
-│   │       ├── page.tsx
-│   │       └── loading.tsx
-│   └── settings/
-│       └── page.tsx                 # Settings (exists)
+├── app/
+│   ├── layout.tsx                   # Root layout (skip-to-content, Providers)
+│   ├── login/page.tsx               # Login page (DiscRipples, Spotify CTA)
+│   ├── (dashboard)/
+│   │   ├── layout.tsx               # Dashboard shell (NavDock, Footer, max-w-7xl)
+│   │   ├── loading.tsx              # Skeleton loader (3 placeholders)
+│   │   ├── page.tsx                 # Dashboard overview
+│   │   ├── playlists/
+│   │   │   ├── page.tsx             # Playlist grid
+│   │   │   └── [slug]/              # ← TODO: Playlist detail page
+│   │   │       ├── page.tsx
+│   │   │       └── loading.tsx
+│   │   ├── queue/
+│   │   │   └── page.tsx             # Queue board (batch generation)
+│   │   └── settings/
+│   │       └── page.tsx             # Settings (schedule, style, account)
+│   ├── changelog/
+│   │   ├── layout.tsx               # Changelog shell (max-w-7xl)
+│   │   └── page.tsx                 # Searchable changelog
+│   └── api/
+│       ├── auth/[...nextauth]/      # Auth.js route handler
+│       ├── playlists/               # Playlist sync + batch generate + regenerate
+│       ├── generations/             # Generation history
+│       ├── styles/                  # Available styles
+│       └── changelog-seen/          # Mark changelog as read
 ├── components/
-│   ├── NavDock.tsx                  # (exists)
-│   ├── NavItems.tsx                 # (exists)
-│   ├── PlaylistCard.tsx             # (exists) — will link to /playlists/[slug]
-│   └── PlaylistGrid.tsx             # (exists)
+│   ├── BackToTop.tsx                # Scroll-to-top (scrollability check)
+│   ├── DiscLogo.tsx                 # 4-ring concentric logo (SVG)
+│   ├── DiscRipples.tsx              # Breathing background logos (login page)
+│   ├── Footer.tsx                   # Footer (FooterLogo, changelog badge, copyright)
+│   ├── FooterLogo.tsx               # DISC ghost button with fireworks-js
+│   ├── LogoLink.tsx                 # Logo link to / (NavDock)
+│   ├── NavDock.tsx                  # Server component nav bar
+│   ├── NavItems.tsx                 # Client nav links with active state
+│   ├── PlaylistCard.tsx             # Playlist thumbnail card — will link to /playlists/[slug]
+│   ├── PlaylistGrid.tsx             # Grid of PlaylistCards
+│   ├── Providers.tsx                # Client providers (SessionProvider)
+│   ├── UserDropdown.tsx             # Avatar dropdown (profile, What's New, sign out)
+│   ├── changelog/                   # ChangelogList, ChangelogEntryBadge, ChangelogMarkSeen
+│   └── queue/                       # QueueBoard, QueueColumn, QueueCard, StylePicker, ImageReviewModal
+├── hooks/
+│   └── useChangelogSeen.ts          # Track last-seen changelog version
 ├── lib/
-│   ├── db.ts                        # queryD1() helper (exists)
-│   ├── auth.ts                      # Auth.js v5 (exists)
-│   └── spotify.ts                   # Spotify API helpers (exists)
+│   ├── auth.config.ts               # Edge-safe auth config (middleware)
+│   ├── auth.ts                      # Full auth (Node.js, crypto, D1 provisioning)
+│   ├── db.ts                        # queryD1() helper (CF REST API)
+│   ├── encryption.ts                # AES-256-GCM encrypt/decrypt
+│   ├── spotify.ts                   # Spotify API helpers (playlists, pagination)
+│   └── sync.ts                      # Spotify → D1 playlist sync
+└── middleware.ts                     # Auth middleware (Edge Runtime)
 ```
 
 ```
@@ -715,9 +858,12 @@ B11 (Theme grouping)             ← Future
 ## Version Strategy
 
 MINOR bumps for user-visible feature groups, PATCH for fixes/infra between:
-- **0.5.0**: Changelog, footer, unread indicator, versioning refinement *(done)*
-- **0.5.x**: Any bug fixes or infra tweaks before Tier 1
-- **0.6.0**: B1 + B4 + B8 (playlist detail + images + trigger) — Tier 1 complete
-- **0.6.x**: Patches between Tier 1 and 2
-- **0.7.0**: B2 + B3 + B6 + B7 (caching + incremental + cost + metadata) — Tier 2 complete
-- **0.8.0**: B5 + B9 + B10 (job detail + scoring + skeletons) — Tier 3 complete
+- **0.1.0**: Phase 0 — Scaffolding *(done)* `dc902ca`
+- **0.2.0**: Phase 1 — Auth + Playlists *(done)* `88b9576`
+- **0.3.0**: Phase 2 — Design System *(done)* `05e4141`
+- **0.4.0**: Phase 3 — Pipeline + Dashboard *(done)* `fcc868a`
+- **0.5.0**: Phase 3.5 — Changelog + Transparency *(done)* `73e67d3`..`7197c34`
+- **0.5.1**: Phase 3.75 — UI Polish *(done)* `88193b7`
+- **0.6.0**: Phase 4 Tier 1 — B4 + B8 + B1 (image API + manual trigger + playlist detail)
+- **0.7.0**: Phase 4 Tier 2 — B2 + B3 + B6 + B7 (caching + incremental + cost + metadata)
+- **0.8.0**: Phase 4 Tier 3 — B5 + B9 + B10 (job detail + scoring + skeletons)

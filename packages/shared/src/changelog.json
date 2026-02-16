@@ -1,6 +1,123 @@
 {
 	"versions": [
 		{
+			"version": "0.6.1",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Mobile responsive kanban: horizontal snap-scroll below md breakpoint, 4-column grid on desktop"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Dynamic footer clearance via ResizeObserver — column padding adapts to actual footer height"
+				},
+				{
+					"type": "feat",
+					"scope": "a11y",
+					"message": "ARIA landmarks: region roles on board and columns, aria-live progress summary, role=alert on errors, sr-only loading text"
+				},
+				{
+					"type": "fix",
+					"scope": "queue",
+					"message": "Done bucket thumbnails now show generated images instead of original Spotify covers"
+				},
+				{
+					"type": "fix",
+					"scope": "queue",
+					"message": "Progress summary hidden when no playlists loaded (no more '0 of 0 generated')"
+				},
+				{
+					"type": "refactor",
+					"scope": "queue",
+					"message": "Scale pass: 48px cover art, 24px checkboxes (WCAG 2.5.8), text-sm status labels, larger action buttons and footer controls"
+				},
+				{
+					"type": "refactor",
+					"scope": "queue",
+					"message": "Color consistency: amber-* replaced with --color-warning tokens, Done bucket uses neutral badge (distinct from Selected green)"
+				},
+				{
+					"type": "refactor",
+					"scope": "queue",
+					"message": "Layout fix: fragment replaced with flex container, broken calc() height removed, viewport-filling dvh-based sizing"
+				},
+				{
+					"type": "refactor",
+					"scope": "queue",
+					"message": "Footer uses .glass class instead of inline glassmorphism, safe-area padding for macOS dock, min-h-[48px] action bar prevents layout shift"
+				}
+			]
+		},
+		{
+			"version": "0.6.0",
+			"date": "2026-02-15",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Queue page with 3-column kanban board for batch cover generation"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Batch trigger: select multiple playlists, choose style override, generate all at once"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Live progress tracking: step-by-step status (fetching tracks, extracting themes, generating image, uploading)"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Image review modal with side-by-side comparison (generated vs Spotify current) and revision notes"
+				},
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "Worker /trigger endpoint: POST-only with bearer token authentication"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Revision notes support: prepend guidance to image generation prompt for iterative refinement"
+				},
+				{
+					"type": "feat",
+					"scope": "api",
+					"message": "New API routes: /api/playlists/generate-batch, /api/playlists/[id]/regenerate, /api/generations, /api/styles"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Queue nav link added between Playlists and Settings"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Dashboard quick action cards linking to Queue and Playlists"
+				},
+				{
+					"type": "refactor",
+					"scope": "db",
+					"message": "Renamed dall_e_prompt column to prompt (migration 004)"
+				},
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Stale processing detection: playlists stuck >5 minutes auto-reset to idle"
+				},
+				{
+					"type": "fix",
+					"scope": "docs",
+					"message": "SPEC.md updated: DALL-E 3 → Replicate Flux Schnell, fixed file paths, removed Clerk references"
+				}
+			]
+		},
+		{
 			"version": "0.5.1",
 			"date": "2026-02-15",
 			"entries": [

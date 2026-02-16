@@ -105,6 +105,78 @@ export interface DbUser {
 	deleted_at: string | null;
 }
 
+// ──────────────────────────────────────────────
+// Pipeline progress types
+// ──────────────────────────────────────────────
+
+export type PipelineStepName =
+	| "fetch_tracks"
+	| "fetch_lyrics"
+	| "extract_themes"
+	| "select_theme"
+	| "generate_image"
+	| "upload";
+
+/** Per-step summary data written by the worker after each step completes */
+export interface StepData {
+	fetch_tracks?: { trackCount: number; trackNames: string[] };
+	fetch_lyrics?: {
+		found: number;
+		total: number;
+		tracks: Array<{
+			name: string;
+			artist: string;
+			found: boolean;
+			snippet: string | null;
+		}>;
+	};
+	extract_themes?: {
+		completed: number;
+		total: number;
+		objectCount: number;
+		topObjects: string[];
+		tokensUsed: number;
+		perTrack: Array<{
+			trackName: string;
+			artist: string;
+			objects: Array<{ object: string; tier: string; reasoning: string }>;
+		}>;
+	};
+	select_theme?: {
+		chosenObject: string;
+		aestheticContext: string;
+		collisionNotes: string;
+		candidates: Array<{
+			object: string;
+			aestheticContext: string;
+			reasoning: string;
+			rank: number;
+		}>;
+	};
+	generate_image?: {
+		prompt: string;
+		styleName: string;
+		predictionId: string;
+		subject: string;
+		styleTemplate: string;
+	};
+	upload?: { r2Key: string };
+}
+
+export interface PipelineProgress {
+	currentStep: PipelineStepName;
+	generationId: string;
+	startedAt: string;
+	steps: StepData;
+}
+
+/** @deprecated Use PipelineProgress instead */
+export type PlaylistProgress = {
+	step: PipelineStepName;
+	started_at: string;
+	generation_id: string;
+};
+
 export interface DbPlaylist {
 	id: string;
 	user_id: string;
@@ -118,6 +190,7 @@ export interface DbPlaylist {
 	generation_count: number;
 	style_override: string | null;
 	cron_enabled: boolean;
+	progress_data: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -128,7 +201,7 @@ export interface DbGeneration {
 	user_id: string;
 	style_id: string;
 	symbolic_object: string;
-	dall_e_prompt: string;
+	prompt: string;
 	image_url: string | null;
 	replicate_prediction_id: string | null;
 	r2_key: string | null;
@@ -140,6 +213,34 @@ export interface DbGeneration {
 	cost_usd: number | null;
 	trigger_type: GenerationTrigger;
 	created_at: string;
+}
+
+export interface GenerationVersion {
+	id: string;
+	r2_key: string;
+	style_name: string;
+	symbolic_object: string;
+	prompt: string;
+	trigger_type: string;
+	created_at: string;
+	duration_ms: number | null;
+	analysis_id: string | null;
+}
+
+export interface AnalysisDetail {
+	id: string;
+	trackSnapshot: Array<{ name: string; artist: string; album: string }>;
+	trackExtractions: TrackExtraction[];
+	convergenceResult: ConvergenceResult;
+	chosenObject: string;
+	aestheticContext: string;
+	styleName: string;
+	tracksAdded: string[] | null;
+	tracksRemoved: string[] | null;
+	outlierCount: number;
+	status: "completed" | "partial";
+	triggerType: string;
+	createdAt: string;
 }
 
 export interface DbStyle {
@@ -246,7 +347,7 @@ export const CONFIG = {
 	PLAYLIST_TIMEOUT_MS: 5 * 60 * 1_000,
 	OPENAI_RETRY_ATTEMPTS: 3,
 	SPOTIFY_RETRY_ATTEMPTS: 3,
-	MAX_TRACKS_PER_PLAYLIST: 20,
+	MAX_TRACKS_PER_PLAYLIST: 15,
 	SPOTIFY_IMAGE_MAX_BYTES: 256 * 1_024,
 	JPEG_QUALITY: 40,
 	IMAGE_MAX_BYTES: 192 * 1_024,

@@ -1,6 +1,5 @@
 /**
  * AES-256-GCM encryption for Spotify refresh tokens.
- * Ported from KGOSPCG/app/lib/encryption.server.ts
  */
 
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";

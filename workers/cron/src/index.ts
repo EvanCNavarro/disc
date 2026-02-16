@@ -15,7 +15,7 @@
  *    e. Update job record with totals
  */
 
-import type { DbStyle, GenerationResult } from "@disc/shared";
+import type { DbStyle } from "@disc/shared";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
 import { refreshAccessToken } from "./spotify";
 
@@ -27,6 +27,7 @@ export interface Env {
 	ENCRYPTION_KEY: string;
 	SPOTIFY_CLIENT_ID: string;
 	SPOTIFY_CLIENT_SECRET: string;
+	WORKER_AUTH_TOKEN: string;
 	ENVIRONMENT: string;
 }
 
@@ -76,26 +77,102 @@ export default {
 		}
 	},
 
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(
+		request: Request,
+		env: Env,
+		_ctx: ExecutionContext,
+	): Promise<Response> {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/health") {
 			return Response.json({ status: "ok", worker: "disc-cron" });
 		}
 
-		// Manual trigger: /trigger?limit=1&playlist=GROWL
 		if (url.pathname === "/trigger") {
-			const limit = Number.parseInt(url.searchParams.get("limit") || "1", 10);
-			const playlistFilter = url.searchParams.get("playlist") || null;
+			if (request.method !== "POST") {
+				return Response.json({ error: "Method not allowed" }, { status: 405 });
+			}
+
+			const authHeader = request.headers.get("Authorization");
+			const expectedToken = env.WORKER_AUTH_TOKEN;
+			if (
+				!expectedToken ||
+				!authHeader ||
+				authHeader !== `Bearer ${expectedToken}`
+			) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+
 			try {
-				const result = await triggerManual(env, limit, playlistFilter);
-				return Response.json(result, {
-					headers: { "Content-Type": "application/json" },
+				const body = (await request.json()) as {
+					playlist_id?: string;
+					playlist_ids?: string[];
+					playlist?: string;
+					limit?: number;
+					style_id?: string;
+					revision_notes?: string;
+					trigger_type?: string;
+				};
+
+				const options: TriggerOptions = {
+					limit: body.limit ?? 1,
+					playlistFilter: body.playlist ?? null,
+					playlistId: body.playlist_id ?? null,
+					playlistIds: body.playlist_ids ?? null,
+					styleId: body.style_id ?? null,
+					revisionNotes: body.revision_notes ?? null,
+					triggerType: (body.trigger_type as "manual" | "cron") ?? "manual",
+				};
+
+				// Validate and set playlists to "processing" synchronously
+				const setup = await setupTrigger(env, options);
+
+				// Run pipeline synchronously — keeps the fetch handler alive
+				// for the full duration. ctx.waitUntil() gets killed after
+				// ~30s, but the fetch handler stays alive as long as the
+				// HTTP connection is open.
+				await executeTrigger(env, setup, options);
+
+				return Response.json({
+					completed: true,
+					playlists: setup.playlists.map((p) => p.name),
 				});
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : "Unknown error";
 				return Response.json({ error: msg }, { status: 500 });
 			}
+		}
+
+		if (url.pathname === "/image") {
+			const authHeader = request.headers.get("Authorization");
+			if (
+				!env.WORKER_AUTH_TOKEN ||
+				!authHeader ||
+				authHeader !== `Bearer ${env.WORKER_AUTH_TOKEN}`
+			) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+
+			const key = url.searchParams.get("key");
+			if (!key) {
+				return Response.json(
+					{ error: "Missing key parameter" },
+					{ status: 400 },
+				);
+			}
+
+			const object = await env.IMAGES.get(key);
+			if (!object) {
+				return Response.json({ error: "Image not found" }, { status: 404 });
+			}
+
+			const headers = new Headers();
+			headers.set(
+				"Content-Type",
+				object.httpMetadata?.contentType ?? "image/png",
+			);
+			headers.set("Cache-Control", "public, max-age=86400");
+			return new Response(object.body, { headers });
 		}
 
 		return new Response("Not Found", { status: 404 });
@@ -198,15 +275,31 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 	}
 }
 
-async function triggerManual(
+interface TriggerOptions {
+	limit: number;
+	playlistFilter: string | null;
+	playlistId: string | null;
+	playlistIds: string[] | null;
+	styleId: string | null;
+	revisionNotes: string | null;
+	triggerType: "manual" | "cron";
+}
+
+interface TriggerSetup {
+	user: UserRow;
+	accessToken: string;
+	style: DbStyle;
+	playlists: PlaylistRow[];
+}
+
+/**
+ * Validates inputs, refreshes token, resolves playlists, and marks them as "queued".
+ * Runs synchronously before returning the HTTP response.
+ */
+async function setupTrigger(
 	env: Env,
-	limit: number,
-	playlistFilter: string | null,
-): Promise<{
-	user: string;
-	playlists: string[];
-	results: GenerationResult[];
-}> {
+	options: TriggerOptions,
+): Promise<TriggerSetup> {
 	const user = await env.DB.prepare(
 		`SELECT id, encrypted_refresh_token, style_preference, cron_time
 		 FROM users
@@ -228,7 +321,8 @@ async function triggerManual(
 		user.id,
 	);
 
-	const styleId = user.style_preference || "bleached-crosshatch";
+	const styleId =
+		options.styleId || user.style_preference || "bleached-crosshatch";
 	const style = await env.DB.prepare("SELECT * FROM styles WHERE id = ?")
 		.bind(styleId)
 		.first<DbStyle>();
@@ -237,26 +331,70 @@ async function triggerManual(
 		throw new Error(`Style not found: ${styleId}`);
 	}
 
-	// Build playlist query with optional name filter
-	let playlistQuery = `SELECT id, spotify_playlist_id, name, user_id
-		FROM playlists WHERE user_id = ?`;
-	const bindParams: unknown[] = [user.id];
+	let playlistsResult: D1Result<PlaylistRow>;
 
-	if (playlistFilter) {
-		playlistQuery += " AND name LIKE ?";
-		bindParams.push(`%${playlistFilter}%`);
+	if (options.playlistIds && options.playlistIds.length > 0) {
+		// Batch mode: multiple playlist IDs
+		const placeholders = options.playlistIds.map(() => "?").join(",");
+		playlistsResult = await env.DB.prepare(
+			`SELECT id, spotify_playlist_id, name, user_id
+			 FROM playlists WHERE id IN (${placeholders}) AND user_id = ?`,
+		)
+			.bind(...options.playlistIds, user.id)
+			.all<PlaylistRow>();
+	} else if (options.playlistId) {
+		playlistsResult = await env.DB.prepare(
+			`SELECT id, spotify_playlist_id, name, user_id
+			 FROM playlists WHERE id = ? AND user_id = ?`,
+		)
+			.bind(options.playlistId, user.id)
+			.all<PlaylistRow>();
+	} else {
+		let playlistQuery = `SELECT id, spotify_playlist_id, name, user_id
+			FROM playlists WHERE user_id = ?`;
+		const bindParams: unknown[] = [user.id];
+
+		if (options.playlistFilter) {
+			playlistQuery += " AND name LIKE ?";
+			bindParams.push(`%${options.playlistFilter}%`);
+		}
+
+		playlistQuery += " LIMIT ?";
+		bindParams.push(options.limit);
+
+		playlistsResult = await env.DB.prepare(playlistQuery)
+			.bind(...bindParams)
+			.all<PlaylistRow>();
 	}
 
-	playlistQuery += " LIMIT ?";
-	bindParams.push(limit);
+	// Mark playlists as "queued" — each transitions to "processing" when
+	// its pipeline starts (ProgressTracker.advance sets status = 'processing')
+	const queuedAt = new Date().toISOString().replace("T", " ").slice(0, 19);
+	for (const playlist of playlistsResult.results) {
+		await env.DB.prepare(
+			`UPDATE playlists SET status = 'queued', progress_data = ? WHERE id = ?`,
+		)
+			.bind(JSON.stringify({ queuedAt }), playlist.id)
+			.run();
+	}
 
-	const playlistsResult = await env.DB.prepare(playlistQuery)
-		.bind(...bindParams)
-		.all<PlaylistRow>();
+	return {
+		user,
+		accessToken,
+		style,
+		playlists: playlistsResult.results,
+	};
+}
 
-	const results: GenerationResult[] = [];
-	const playlistNames: string[] = [];
-
+/**
+ * Runs the pipeline for each playlist sequentially.
+ * Each playlist transitions from "queued" → "processing" → "generated"/"failed".
+ */
+async function executeTrigger(
+	env: Env,
+	setup: TriggerSetup,
+	options: TriggerOptions,
+): Promise<void> {
 	const pipelineEnv: PipelineEnv = {
 		DB: env.DB,
 		IMAGES: env.IMAGES,
@@ -264,18 +402,17 @@ async function triggerManual(
 		OPENAI_API_KEY: env.OPENAI_API_KEY,
 	};
 
-	for (const playlist of playlistsResult.results) {
-		playlistNames.push(playlist.name);
+	for (const playlist of setup.playlists) {
 		console.log(`[Trigger] Processing "${playlist.name}"...`);
-
-		const result = await generateForPlaylist(
+		await generateForPlaylist(
 			playlist,
-			style,
-			accessToken,
+			setup.style,
+			setup.accessToken,
 			pipelineEnv,
+			{
+				triggerType: options.triggerType,
+				revisionNotes: options.revisionNotes ?? undefined,
+			},
 		);
-		results.push(result);
 	}
-
-	return { user: user.id, playlists: playlistNames, results };
 }
