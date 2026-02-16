@@ -11,7 +11,7 @@ export function formatCost(usd: number | null): string {
 	return `$${usd.toFixed(4)}`;
 }
 
-const timestampFormatter = new Intl.DateTimeFormat(undefined, {
+const timestampFormatter = new Intl.DateTimeFormat("en-GB", {
 	day: "numeric",
 	month: "short",
 	year: "numeric",
