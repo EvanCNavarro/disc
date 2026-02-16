@@ -1,13 +1,31 @@
 "use client";
 
-import type { DbStyle } from "@disc/shared";
+import type { DbStyle, StyleHeuristics } from "@disc/shared";
+import { getDefaultHeuristics } from "@disc/shared";
+import { useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
+
+import { HeuristicControls } from "./HeuristicControls";
 
 interface StyleEditorProps {
 	style: DbStyle;
 }
 
 export function StyleEditor({ style }: StyleEditorProps) {
+	const initialHeuristics = useMemo<StyleHeuristics>(() => {
+		if (style.heuristics) {
+			try {
+				return JSON.parse(style.heuristics) as StyleHeuristics;
+			} catch {
+				// fall through to defaults
+			}
+		}
+		return getDefaultHeuristics();
+	}, [style.heuristics]);
+
+	const [heuristics, setHeuristics] =
+		useState<StyleHeuristics>(initialHeuristics);
+
 	return (
 		<div className="flex flex-col gap-[var(--space-lg)]">
 			{/* Breadcrumb */}
@@ -23,9 +41,10 @@ export function StyleEditor({ style }: StyleEditorProps) {
 						<h2 className="mb-[var(--space-md)] text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
 							Style Controls
 						</h2>
-						<p className="text-sm text-[var(--color-text-muted)]">
-							Heuristic controls will go here (Task 9)
-						</p>
+						<HeuristicControls
+							heuristics={heuristics}
+							onChange={setHeuristics}
+						/>
 					</div>
 				</div>
 
