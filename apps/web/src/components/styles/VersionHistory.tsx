@@ -1,6 +1,6 @@
 "use client";
 
-interface VersionEntry {
+export interface VersionEntry {
 	id: string;
 	version: string;
 	notes: string | null;

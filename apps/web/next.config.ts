@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
 			{ protocol: "https", hostname: "image-cdn-ak.spotifycdn.com" },
 			{ protocol: "https", hostname: "image-cdn-fa.spotifycdn.com" },
 			{ protocol: "https", hostname: "wrapped-images.spotifycdn.com" },
+			{ protocol: "https", hostname: "replicate.delivery" },
 		],
 	},
 };

@@ -4,7 +4,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { Image02Icon } from "@hugeicons-pro/core-stroke-rounded";
 import Image from "next/image";
 
-interface PreviewImage {
+export interface PreviewImage {
 	url: string | null;
 	subject: string;
 	loading: boolean;
