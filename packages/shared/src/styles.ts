@@ -65,6 +65,14 @@ export const STYLES: Record<string, StyleDefinition> = {
 		promptTemplate:
 			"A Japanese ukiyo-e woodblock print of {subject}. Flat planes of rich color with bold black outlines. Traditional Edo-period aesthetic with flowing organic lines. Visible wood grain texture from the printing process. Limited but vibrant palette — indigo, vermillion, ochre, sage green. Decorative clouds or wave patterns as atmospheric elements. Elegant compositional balance with asymmetric harmony. Stylized natural forms, seasonal sensitivity. No text, no words, no letters, no kanji. Square composition.",
 	},
+	kuroginorenjiiro: {
+		id: "kuroginorenjiiro",
+		name: "Kuro Gin Orenjiiro",
+		description:
+			"60% Black / 30% Silver / 10% Orange — single symbolic object in faceted stone with warm amber backlight against deep void",
+		promptTemplate:
+			"KUROGINORENJIIRO style. A single {subject}, sculpted from rough-hewn faceted stone with a matte silver-gray surface. The object is centered and floating against a deep black void background. A single warm orange-amber glow emanates from directly behind the object, bleeding softly through cracks, seams, and faceted edges of the stone. Color ratio: 60% near-black background (#0A0A0F), 30% silver-gray stone material (#4A4A52 to #2A2A32), 10% warm orange accent light (#D4760A to #FF8C1A). Low-polygon faceted geometry — broad chisel-cut planes, not smooth, resembling hand-carved volcanic basalt. Fine granular noise across all surfaces. The object occupies 40-60% of the frame, viewed from a slightly elevated three-quarter angle. No secondary light sources, no fill light, no ambient bounce — only the single orange backlight creating dramatic rim lighting and deep shadows on the front face. Photorealistic material rendering on a stylized geometric form. Moody, cinematic, contemplative. Album cover quality. No text, no words, no letters. Square 1:1 composition.",
+	},
 } as const;
 
 export const DEFAULT_STYLE_ID = "bleached-crosshatch";

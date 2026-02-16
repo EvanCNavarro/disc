@@ -15,6 +15,7 @@ export const MODEL_PRICING: Record<
 
 export const IMAGE_PRICING: Record<string, number> = {
 	"stability-ai/stable-diffusion-3.5-large": 0.035,
+	"black-forest-labs/flux-dev": 0.055,
 };
 
 const DEFAULT_IMAGE_COST = 0.04;
