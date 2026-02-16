@@ -1,4 +1,5 @@
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signOut } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
@@ -7,31 +8,19 @@ interface UserRow {
 	id: string;
 	display_name: string;
 	email: string;
-	style_preference: string;
 	cron_enabled: number;
 	cron_time: string;
 }
 
-interface StyleRow {
-	id: string;
-	name: string;
-	description: string | null;
-}
-
 async function getSettingsData(spotifyId: string) {
 	const users = await queryD1<UserRow>(
-		"SELECT id, display_name, email, style_preference, cron_enabled, cron_time FROM users WHERE spotify_user_id = ? LIMIT 1",
+		"SELECT id, display_name, email, cron_enabled, cron_time FROM users WHERE spotify_user_id = ? LIMIT 1",
 		[spotifyId],
 	);
 	const user = users[0];
 	if (!user) return null;
 
-	const styles = await queryD1<StyleRow>(
-		"SELECT id, name, description FROM styles WHERE user_id = ? ORDER BY name",
-		[user.id],
-	);
-
-	return { user, styles };
+	return { user };
 }
 
 export default async function SettingsPage() {
@@ -49,7 +38,7 @@ export default async function SettingsPage() {
 		);
 	}
 
-	const { user, styles } = data;
+	const { user } = data;
 
 	const updateSchedule = async (formData: FormData) => {
 		"use server";
@@ -69,29 +58,6 @@ export default async function SettingsPage() {
 		await queryD1(
 			"UPDATE users SET cron_time = ?, cron_enabled = ?, updated_at = datetime('now') WHERE id = ?",
 			[cronTime, cronEnabled, users[0].id],
-		);
-
-		revalidatePath("/settings");
-		revalidatePath("/");
-	};
-
-	const updateStyle = async (formData: FormData) => {
-		"use server";
-		const session = await auth();
-		if (!session?.spotifyId) return;
-
-		const styleId = formData.get("style_id");
-		if (typeof styleId !== "string") return;
-
-		const users = await queryD1<{ id: string }>(
-			"SELECT id FROM users WHERE spotify_user_id = ? LIMIT 1",
-			[session.spotifyId],
-		);
-		if (!users[0]) return;
-
-		await queryD1(
-			"UPDATE users SET style_preference = ?, updated_at = datetime('now') WHERE id = ?",
-			[styleId, users[0].id],
 		);
 
 		revalidatePath("/settings");
@@ -151,58 +117,20 @@ export default async function SettingsPage() {
 				</form>
 			</section>
 
-			{/* ── Style ── */}
+			{/* ── Styles ── */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)]">
 				<h2 className="mb-[var(--space-md)] text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
-					Art Style
+					Art Styles
 				</h2>
-
-				{styles.length === 0 ? (
-					<p className="text-sm text-[var(--color-text-muted)]">
-						No styles configured. The default style will be used.
-					</p>
-				) : (
-					<form
-						action={updateStyle}
-						className="flex flex-col gap-[var(--space-md)]"
-					>
-						<div className="flex flex-col gap-[var(--space-sm)]">
-							{styles.map((s) => (
-								<label
-									key={s.id}
-									className={`flex cursor-pointer items-start gap-3 rounded-[var(--radius-md)] border p-[var(--space-md)] transition-colors ${
-										s.id === user.style_preference
-											? "border-[var(--color-accent)] bg-[var(--color-accent-glow)]"
-											: "border-[var(--color-border)] hover:bg-[var(--color-surface)]"
-									}`}
-								>
-									<input
-										type="radio"
-										name="style_id"
-										value={s.id}
-										defaultChecked={s.id === user.style_preference}
-										className="mt-0.5 accent-[var(--color-accent)]"
-									/>
-									<div>
-										<span className="text-sm font-medium">{s.name}</span>
-										{s.description && (
-											<p className="mt-0.5 text-xs text-[var(--color-text-muted)]">
-												{s.description}
-											</p>
-										)}
-									</div>
-								</label>
-							))}
-						</div>
-
-						<button
-							type="submit"
-							className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
-						>
-							Update Style
-						</button>
-					</form>
-				)}
+				<p className="mb-[var(--space-sm)] text-sm text-[var(--color-text-muted)]">
+					Browse, create, and manage your art styles.
+				</p>
+				<Link
+					href="/styles"
+					className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]"
+				>
+					Manage styles &rarr;
+				</Link>
 			</section>
 
 			{/* ── Account ── */}
