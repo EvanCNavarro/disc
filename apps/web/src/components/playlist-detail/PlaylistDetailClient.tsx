@@ -56,6 +56,30 @@ interface PlaylistDetailClientProps {
 	claimedObjects: ClaimedObject[];
 }
 
+const TIER_SCORES: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+function computeObjectScores(
+	extractions: TrackExtraction[],
+): Array<{ object: string; score: number; trackCount: number }> {
+	const scores = new Map<string, { score: number; tracks: Set<string> }>();
+	for (const track of extractions) {
+		for (const obj of track.objects) {
+			const key = obj.object.toLowerCase();
+			const entry = scores.get(key) ?? { score: 0, tracks: new Set() };
+			entry.score += TIER_SCORES[obj.tier] ?? 0;
+			entry.tracks.add(`${track.trackName}|||${track.artist}`);
+			scores.set(key, entry);
+		}
+	}
+	return Array.from(scores.entries())
+		.map(([object, { score, tracks }]) => ({
+			object,
+			score,
+			trackCount: tracks.size,
+		}))
+		.sort((a, b) => b.score - a.score);
+}
+
 export function PlaylistDetailClient({
 	playlist,
 	analysis,
@@ -281,6 +305,35 @@ export function PlaylistDetailClient({
 					</div>
 				</section>
 			)}
+
+			{/* Object Scores */}
+			{analysis &&
+				analysis.track_extractions.length > 0 &&
+				(() => {
+					const scores = computeObjectScores(analysis.track_extractions);
+					if (scores.length === 0) return null;
+					return (
+						<section className="flex flex-col gap-[var(--space-md)]">
+							<h2 className="text-lg font-semibold">Object Scores</h2>
+							<div className="flex flex-wrap gap-2">
+								{scores.slice(0, 12).map((s) => (
+									<div
+										key={s.object}
+										className="flex items-center gap-1.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-3 py-1.5 text-sm"
+									>
+										<span className="font-medium">{s.object}</span>
+										<span className="text-xs text-[var(--color-text-muted)]">
+											{s.score}pts
+										</span>
+										<span className="text-xs text-[var(--color-text-faint)]">
+											&times;{s.trackCount}
+										</span>
+									</div>
+								))}
+							</div>
+						</section>
+					);
+				})()}
 
 			{/* Object Inventory */}
 			{claimedObjects.length > 0 && (

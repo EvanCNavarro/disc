@@ -218,10 +218,16 @@ export async function generateForPlaylist(
 					})),
 				});
 			},
+			env.DB,
 		);
 		const { extractions } = extractResult;
 		extractTokensIn = extractResult.inputTokens;
 		extractTokensOut = extractResult.outputTokens;
+		if (extractResult.cacheHits > 0) {
+			console.log(
+				`[Pipeline] Extraction cache: ${extractResult.cacheHits} hits, ${extractions.length - extractResult.cacheHits} fresh`,
+			);
+		}
 		console.log(
 			`[Pipeline] Extracted objects for ${extractions.length} tracks (${extractTokensIn}+${extractTokensOut} tokens)`,
 		);

@@ -15,11 +15,19 @@ import { createFallbackContext } from "./lyrics";
 import { chatCompletionJSON } from "./openai";
 
 interface TrackWithLyrics {
+	spotifyTrackId: string;
 	name: string;
 	artist: string;
 	album: string;
 	lyrics: string | null;
 	lyricsFound: boolean;
+}
+
+interface CachedExtraction {
+	spotify_track_id: string;
+	extraction_json: string;
+	input_tokens: number;
+	output_tokens: number;
 }
 
 // ──────────────────────────────────────────────
@@ -79,6 +87,7 @@ async function extractSingleTrack(
 
 /**
  * Extract themes for all tracks in parallel (concurrency-limited).
+ * When a D1 database is provided, checks/populates the song_extractions cache.
  * Accepts an optional onProgress callback for real-time updates.
  */
 export async function extractThemes(
@@ -90,10 +99,12 @@ export async function extractThemes(
 		extractions: TrackExtraction[],
 		tokensUsed: number,
 	) => Promise<void> | void,
+	db?: D1Database,
 ): Promise<{
 	extractions: TrackExtraction[];
 	inputTokens: number;
 	outputTokens: number;
+	cacheHits: number;
 }> {
 	const CONCURRENCY = 5;
 	const extractions: (TrackExtraction | null)[] = new Array(tracks.length).fill(
@@ -101,11 +112,68 @@ export async function extractThemes(
 	);
 	let totalInputTokens = 0;
 	let totalOutputTokens = 0;
-	let index = 0;
+	let cacheHits = 0;
+
+	// ── Cache lookup ──
+	const uncachedIndices: number[] = [];
+
+	if (db && tracks.length > 0) {
+		try {
+			const ids = tracks.map((t) => t.spotifyTrackId);
+			const placeholders = ids.map(() => "?").join(",");
+			const cached = await db
+				.prepare(
+					`SELECT spotify_track_id, extraction_json, input_tokens, output_tokens
+					 FROM song_extractions WHERE spotify_track_id IN (${placeholders})`,
+				)
+				.bind(...ids)
+				.all<CachedExtraction>();
+
+			const cacheMap = new Map(
+				cached.results.map((r) => [r.spotify_track_id, r]),
+			);
+
+			for (let i = 0; i < tracks.length; i++) {
+				const hit = cacheMap.get(tracks[i].spotifyTrackId);
+				if (hit) {
+					extractions[i] = JSON.parse(hit.extraction_json);
+					totalInputTokens += hit.input_tokens;
+					totalOutputTokens += hit.output_tokens;
+					cacheHits++;
+				} else {
+					uncachedIndices.push(i);
+				}
+			}
+
+			if (cacheHits > 0) {
+				console.log(
+					`[Extraction] Cache: ${cacheHits} hits, ${uncachedIndices.length} misses`,
+				);
+			}
+		} catch (err) {
+			console.warn("[Extraction] Cache lookup failed, extracting all:", err);
+			uncachedIndices.length = 0;
+			for (let i = 0; i < tracks.length; i++) {
+				if (!extractions[i]) uncachedIndices.push(i);
+			}
+		}
+	} else {
+		for (let i = 0; i < tracks.length; i++) uncachedIndices.push(i);
+	}
+
+	// ── Extract uncached tracks via LLM ──
+	const newlyExtracted: Array<{
+		index: number;
+		extraction: TrackExtraction;
+		inputTokens: number;
+		outputTokens: number;
+	}> = [];
+	let fetchIdx = 0;
 
 	async function worker(): Promise<void> {
-		while (index < tracks.length) {
-			const i = index++;
+		while (fetchIdx < uncachedIndices.length) {
+			const fi = fetchIdx++;
+			const i = uncachedIndices[fi];
 			const track = tracks[i];
 
 			try {
@@ -113,6 +181,12 @@ export async function extractThemes(
 				extractions[i] = result.extraction;
 				totalInputTokens += result.inputTokens;
 				totalOutputTokens += result.outputTokens;
+				newlyExtracted.push({
+					index: i,
+					extraction: result.extraction,
+					inputTokens: result.inputTokens,
+					outputTokens: result.outputTokens,
+				});
 			} catch (error) {
 				console.warn(`[Extraction] Failed for "${track.name}":`, error);
 				extractions[i] = {
@@ -138,16 +212,63 @@ export async function extractThemes(
 		}
 	}
 
-	const workers = Array.from(
-		{ length: Math.min(CONCURRENCY, tracks.length) },
-		() => worker(),
-	);
-	await Promise.all(workers);
+	if (uncachedIndices.length > 0) {
+		const workers = Array.from(
+			{ length: Math.min(CONCURRENCY, uncachedIndices.length) },
+			() => worker(),
+		);
+		await Promise.all(workers);
+	}
+
+	// ── Populate cache with newly extracted tracks ──
+	if (db && newlyExtracted.length > 0) {
+		try {
+			const stmts = newlyExtracted.map((item) =>
+				db
+					.prepare(
+						`INSERT OR IGNORE INTO song_extractions
+						 (spotify_track_id, track_name, artist_name, extraction_json, model_name, input_tokens, output_tokens)
+						 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+					)
+					.bind(
+						tracks[item.index].spotifyTrackId,
+						tracks[item.index].name,
+						tracks[item.index].artist,
+						JSON.stringify(item.extraction),
+						"gpt-4o-mini",
+						item.inputTokens,
+						item.outputTokens,
+					),
+			);
+			await db.batch(stmts);
+			console.log(
+				`[Extraction] Cached ${newlyExtracted.length} new extractions`,
+			);
+		} catch (err) {
+			console.warn("[Extraction] Cache write failed:", err);
+		}
+	}
+
+	// Report final progress for cached tracks
+	if (cacheHits > 0) {
+		const completed = extractions.filter((e) => e !== null);
+		try {
+			await onProgress?.(
+				completed.length,
+				tracks.length,
+				completed as TrackExtraction[],
+				totalInputTokens + totalOutputTokens,
+			);
+		} catch {
+			// Non-critical
+		}
+	}
 
 	return {
 		extractions: extractions.filter((e): e is TrackExtraction => e !== null),
 		inputTokens: totalInputTokens,
 		outputTokens: totalOutputTokens,
+		cacheHits,
 	};
 }
 
@@ -179,6 +300,41 @@ Respond with JSON:
   "collisionNotes": "Any notes about collisions avoided or creative pivots made"
 }`;
 
+// ──────────────────────────────────────────────
+// Object scoring
+// ──────────────────────────────────────────────
+
+const TIER_SCORES: Record<string, number> = { high: 3, medium: 2, low: 1 };
+
+export interface ObjectScore {
+	object: string;
+	score: number;
+	trackCount: number;
+}
+
+/** Aggregate scores across all tracks for each unique object. */
+export function scoreObjects(extractions: TrackExtraction[]): ObjectScore[] {
+	const scores = new Map<string, { score: number; tracks: Set<string> }>();
+
+	for (const track of extractions) {
+		for (const obj of track.objects) {
+			const key = obj.object.toLowerCase();
+			const entry = scores.get(key) ?? { score: 0, tracks: new Set() };
+			entry.score += TIER_SCORES[obj.tier] ?? 0;
+			entry.tracks.add(`${track.trackName}|||${track.artist}`);
+			scores.set(key, entry);
+		}
+	}
+
+	return Array.from(scores.entries())
+		.map(([object, { score, tracks }]) => ({
+			object,
+			score,
+			trackCount: tracks.size,
+		}))
+		.sort((a, b) => b.score - a.score);
+}
+
 function buildConvergencePrompt(
 	playlistName: string,
 	extractions: TrackExtraction[],
@@ -199,6 +355,16 @@ function buildConvergencePrompt(
 		.filter(Boolean)
 		.join("\n\n");
 
+	// Aggregate scores to help the LLM prioritize recurring objects
+	const scores = scoreObjects(extractions);
+	const scoreSummary = scores
+		.slice(0, 10)
+		.map(
+			(s) =>
+				`- "${s.object}" — ${s.score}pts across ${s.trackCount} track${s.trackCount !== 1 ? "s" : ""}`,
+		)
+		.join("\n");
+
 	const exclusionList =
 		exclusions.length > 0
 			? exclusions
@@ -211,10 +377,13 @@ function buildConvergencePrompt(
 Per-track extracted objects:
 ${objectSummary}
 
+Aggregate object scores (higher = more prominent across playlist):
+${scoreSummary}
+
 Objects already claimed by other playlists (DO NOT reuse these):
 ${exclusionList}
 
-Select the best symbolic object for this playlist's cover art.`;
+Select the best symbolic object for this playlist's cover art. Prefer objects with higher aggregate scores.`;
 }
 
 export async function convergeAndSelect(
