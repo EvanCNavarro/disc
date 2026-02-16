@@ -22,6 +22,7 @@ interface CostBreakdown {
 interface GenerationRow {
 	id: string;
 	playlist_name: string;
+	r2_key: string | null;
 	symbolic_object: string;
 	style_name: string;
 	trigger_type: string;
@@ -160,6 +161,9 @@ export function GenerationHistoryTable() {
 						<table className="w-full text-sm">
 							<thead>
 								<tr className="border-b border-[var(--color-border-subtle)] text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+									<th className="pb-2 pr-2 w-10">
+										<span className="sr-only">Cover</span>
+									</th>
 									<th className="pb-2 pr-3">Playlist</th>
 									<th className="pb-2 pr-3">Object</th>
 									<th className="pb-2 pr-3">Style</th>
@@ -506,6 +510,19 @@ function DesktopRow({
 				}}
 				className="cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
 			>
+				<td className="py-2.5 pr-2 w-10">
+					{row.r2_key ? (
+						// biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image
+						<img
+							src={`/api/images?key=${encodeURIComponent(row.r2_key)}`}
+							alt=""
+							className="h-8 w-8 rounded-[var(--radius-sm)] object-cover"
+							loading="lazy"
+						/>
+					) : (
+						<div className="h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--color-surface)]" />
+					)}
+				</td>
 				<td className="py-2.5 pr-3 max-w-[12rem] truncate">
 					{row.playlist_name}
 				</td>
@@ -533,7 +550,7 @@ function DesktopRow({
 			</tr>
 			{expanded && (
 				<tr>
-					<td colSpan={7} className="pb-2">
+					<td colSpan={8} className="pb-2">
 						<ExpandedDetails row={row} />
 					</td>
 				</tr>
@@ -560,13 +577,26 @@ function MobileRow({
 				onClick={onToggle}
 				className="flex w-full items-center justify-between py-3 text-left"
 			>
-				<div className="flex flex-col gap-0.5 min-w-0">
-					<span className="text-sm font-medium truncate">
-						{row.playlist_name}
-					</span>
-					<span className="text-xs text-[var(--color-text-muted)] truncate">
-						{row.symbolic_object || "\u2014"}
-					</span>
+				<div className="flex items-center gap-2.5 min-w-0">
+					{row.r2_key ? (
+						// biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image
+						<img
+							src={`/api/images?key=${encodeURIComponent(row.r2_key)}`}
+							alt=""
+							className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] object-cover"
+							loading="lazy"
+						/>
+					) : (
+						<div className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]" />
+					)}
+					<div className="flex flex-col gap-0.5 min-w-0">
+						<span className="text-sm font-medium truncate">
+							{row.playlist_name}
+						</span>
+						<span className="text-xs text-[var(--color-text-muted)] truncate">
+							{row.symbolic_object || "\u2014"}
+						</span>
+					</div>
 				</div>
 				<div className="flex items-center gap-3 shrink-0 ml-3">
 					<StatusBadge status={row.status} />

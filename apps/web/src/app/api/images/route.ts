@@ -35,7 +35,7 @@ export async function GET(request: Request) {
 	return new Response(workerRes.body, {
 		headers: {
 			"Content-Type": workerRes.headers.get("Content-Type") ?? "image/png",
-			"Cache-Control": "public, max-age=86400",
+			"Cache-Control": "public, max-age=31536000, immutable",
 		},
 	});
 }

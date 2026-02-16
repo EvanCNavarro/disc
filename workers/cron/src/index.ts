@@ -171,7 +171,7 @@ export default {
 				"Content-Type",
 				object.httpMetadata?.contentType ?? "image/png",
 			);
-			headers.set("Cache-Control", "public, max-age=86400");
+			headers.set("Cache-Control", "public, max-age=31536000, immutable");
 			return new Response(object.body, { headers });
 		}
 
