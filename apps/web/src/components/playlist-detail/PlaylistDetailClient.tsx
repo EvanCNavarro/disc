@@ -136,7 +136,7 @@ export function PlaylistDetailClient({
 							</div>
 
 							{/* Convergence candidates */}
-							{analysis.convergence_result.candidates.length > 1 && (
+							{analysis.convergence_result?.candidates?.length > 1 && (
 								<div className="flex flex-col gap-[var(--space-sm)] border-t border-[var(--color-border-subtle)] pt-[var(--space-md)]">
 									<h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
 										Candidates

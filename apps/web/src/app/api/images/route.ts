@@ -16,6 +16,15 @@ export async function GET(request: Request) {
 		return Response.json({ error: "Missing key parameter" }, { status: 400 });
 	}
 
+	// Validate key is within the generations prefix and has no path traversal
+	if (
+		!key.startsWith("generations/") ||
+		key.includes("..") ||
+		!key.endsWith(".png")
+	) {
+		return Response.json({ error: "Invalid key" }, { status: 400 });
+	}
+
 	if (!WORKER_URL || !WORKER_TOKEN) {
 		return Response.json({ error: "Worker not configured" }, { status: 503 });
 	}
