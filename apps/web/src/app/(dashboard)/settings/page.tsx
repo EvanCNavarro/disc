@@ -70,7 +70,7 @@ export default async function SettingsPage() {
 	};
 
 	return (
-		<div className="flex flex-col gap-[var(--space-xl)]">
+		<div className="flex flex-col gap-[var(--space-lg)]">
 			<h1 className="text-2xl font-bold">Settings</h1>
 
 			{/* ── Schedule ── */}

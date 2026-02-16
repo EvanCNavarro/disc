@@ -26,7 +26,8 @@ export async function GET() {
 
 	const styles = await queryD1<StyleRow>(
 		`SELECT id, name, description, is_default FROM styles
-		 WHERE user_id = ? OR is_default = 1
+		 WHERE (user_id = ? OR is_default = 1)
+		   AND (status = 'active' OR status IS NULL)
 		 ORDER BY is_default DESC, name ASC`,
 		[users[0].id],
 	);
