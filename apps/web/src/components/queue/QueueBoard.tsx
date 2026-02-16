@@ -5,11 +5,11 @@ import type {
 	GenerationVersion,
 	PipelineProgress,
 } from "@disc/shared";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageReviewModal } from "./ImageReviewModal";
 import { QueueCard } from "./QueueCard";
 import { QueueColumn } from "./QueueColumn";
-import { QueueFooter } from "./QueueFooter";
+import { StylePicker } from "./StylePicker";
 
 interface PlaylistWithImage extends DbPlaylist {
 	latest_r2_key: string | null;
@@ -28,11 +28,9 @@ function parseProgress(data: string | null): PipelineProgress | null {
 	if (!data) return null;
 	try {
 		const raw = JSON.parse(data) as Record<string, unknown>;
-		// New format
 		if (raw.currentStep) {
 			return raw as unknown as PipelineProgress;
 		}
-		// Old format ({ step, started_at, generation_id })
 		if (raw.step) {
 			return {
 				currentStep: raw.step as PipelineProgress["currentStep"],
@@ -59,24 +57,6 @@ export function QueueBoard() {
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-	// Footer height measurement for dynamic column clearance
-	const footerRef = useRef<HTMLElement>(null);
-	const [footerHeight, setFooterHeight] = useState(128);
-
-	useEffect(() => {
-		const el = footerRef.current;
-		if (!el) return;
-		const ro = new ResizeObserver((entries) => {
-			for (const entry of entries) {
-				const height =
-					entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height;
-				setFooterHeight(height);
-			}
-		});
-		ro.observe(el);
-		return () => ro.disconnect();
-	}, []);
 
 	// Fetch playlists and styles
 	const fetchData = useCallback(async () => {
@@ -120,7 +100,7 @@ export function QueueBoard() {
 		? parseProgress(modalPlaylist.progress_data)
 		: null;
 
-	// Polling logic — always poll; fast when processing, slow otherwise
+	// Polling logic
 	useEffect(() => {
 		fetchData();
 	}, [fetchData]);
@@ -137,7 +117,7 @@ export function QueueBoard() {
 		};
 	}, [hasProcessing, fetchData]);
 
-	// Fetch generation history when modal opens or when processing completes
+	// Fetch generation history when modal opens or processing completes
 	const fetchGenerations = useCallback(async (spotifyPlaylistId: string) => {
 		try {
 			const res = await fetch(
@@ -154,20 +134,16 @@ export function QueueBoard() {
 		}
 	}, []);
 
-	// Track previous processing state to detect completion
 	const prevProcessingRef = useRef(modalPlaylistProcessing);
 	useEffect(() => {
 		const wasProcessing = prevProcessingRef.current;
 		prevProcessingRef.current = modalPlaylistProcessing;
-
-		// If modal playlist just finished processing, refresh generations
 		if (wasProcessing && !modalPlaylistProcessing && modalPlaylist) {
 			fetchGenerations(modalPlaylist.spotify_playlist_id);
 		}
 	}, [modalPlaylistProcessing, modalPlaylist, fetchGenerations]);
 
-	// Initial generations fetch when modal opens
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on ID, not object ref — adding modalPlaylist would cause infinite re-renders
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally keyed on ID, not object ref
 	useEffect(() => {
 		if (!modalPlaylist) {
 			setGenerations([]);
@@ -179,7 +155,7 @@ export function QueueBoard() {
 		});
 	}, [modalPlaylistId]);
 
-	// Selection handlers
+	// Selection handlers — works for todo AND done items
 	const toggleSelect = useCallback((id: string) => {
 		setSelectedIds((prev) => {
 			const next = new Set(prev);
@@ -192,9 +168,11 @@ export function QueueBoard() {
 		});
 	}, []);
 
+	const selectableItems = useMemo(() => [...todo, ...done], [todo, done]);
+
 	const selectAll = useCallback(() => {
-		setSelectedIds(new Set(todo.map((p) => p.id)));
-	}, [todo]);
+		setSelectedIds(new Set(selectableItems.map((p) => p.id)));
+	}, [selectableItems]);
 
 	const clearSelection = useCallback(() => {
 		setSelectedIds(new Set());
@@ -260,13 +238,7 @@ export function QueueBoard() {
 		[playlists, fetchData],
 	);
 
-	// Requeue: move done/failed items back to todo
-	const handleRequeue = useCallback(async () => {
-		const doneIds = done.map((p) => p.id);
-		setSelectedIds(new Set(doneIds));
-	}, [done]);
-
-	// Modal handlers — keep modal open, don't close on rerun/revise
+	// Modal handlers
 	const handleRerun = useCallback(async () => {
 		if (!modalPlaylist) return;
 		try {
@@ -281,7 +253,6 @@ export function QueueBoard() {
 					}),
 				},
 			);
-			// Refresh playlist data to pick up "processing" status
 			await fetchData();
 		} catch {
 			// Error handling via polling
@@ -304,7 +275,6 @@ export function QueueBoard() {
 						}),
 					},
 				);
-				// Refresh playlist data to pick up "processing" status
 				await fetchData();
 			} catch {
 				// Error handling via polling
@@ -312,21 +282,6 @@ export function QueueBoard() {
 		},
 		[modalPlaylist, styleOverride, fetchData],
 	);
-
-	// Derive bucket data for footer
-	const toSummary = (p: PlaylistWithImage) => ({
-		id: p.id,
-		name: p.name,
-		spotify_cover_url: p.latest_r2_key
-			? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
-			: p.spotify_cover_url,
-	});
-
-	const selectedPlaylists = todo
-		.filter((p) => selectedIds.has(p.id))
-		.map(toSummary);
-	const runningPlaylists = [...scheduled, ...inProgress].map(toSummary);
-	const donePlaylists = done.slice(0, 8).map(toSummary);
 
 	if (loading) {
 		return (
@@ -350,11 +305,64 @@ export function QueueBoard() {
 		);
 	}
 
+	const hasSelection = selectedIds.size > 0;
+
 	return (
 		<section
 			aria-label="Generation queue"
 			className="flex flex-col flex-1 min-h-0 gap-[var(--space-md)]"
 		>
+			{/* Sticky action header */}
+			<div className="sticky top-0 z-30 shrink-0 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
+				{/* Selection count */}
+				<span className="text-sm font-medium text-[var(--color-text-secondary)]">
+					{hasSelection
+						? `${selectedIds.size} selected`
+						: `${playlists.length} playlists`}
+				</span>
+
+				{/* Spacer */}
+				<div className="flex-1" />
+
+				{/* Style picker */}
+				<StylePicker
+					styles={styles}
+					value={styleOverride}
+					onChange={setStyleOverride}
+				/>
+
+				{/* Select / Deselect */}
+				{hasSelection ? (
+					<button
+						type="button"
+						onClick={clearSelection}
+						className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+					>
+						Deselect
+					</button>
+				) : (
+					<button
+						type="button"
+						onClick={selectAll}
+						className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+					>
+						Select All
+					</button>
+				)}
+
+				{/* Generate button */}
+				<button
+					type="button"
+					onClick={handleBatchTrigger}
+					disabled={!hasSelection || triggering}
+					className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
+				>
+					{triggering
+						? "Triggering..."
+						: `Generate${hasSelection ? ` (${selectedIds.size})` : ""}`}
+				</button>
+			</div>
+
 			{/* Error banner */}
 			{error && (
 				<div
@@ -372,26 +380,10 @@ export function QueueBoard() {
 				</div>
 			)}
 
-			{/* Progress summary — hidden when no playlists loaded */}
-			{playlists.length > 0 && (
-				<output
-					aria-live="polite"
-					className="block shrink-0 text-sm text-[var(--color-text-muted)]"
-				>
-					{done.filter((p) => p.status === "generated").length} of{" "}
-					{playlists.length} generated
-				</output>
-			)}
-
-			{/* Kanban grid — horizontal scroll on mobile, 4-col grid on desktop */}
+			{/* Kanban grid */}
 			<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none flex-1 min-h-0">
 				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
-					<QueueColumn
-						title="To Do"
-						count={todo.length}
-						variant="todo"
-						footerPadding={footerHeight}
-					>
+					<QueueColumn title="To Do" count={todo.length} variant="todo">
 						{todo.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
 								No playlists pending
@@ -419,7 +411,6 @@ export function QueueBoard() {
 						title="Scheduled"
 						count={scheduled.length}
 						variant="scheduled"
-						footerPadding={footerHeight}
 					>
 						{scheduled.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
@@ -446,7 +437,6 @@ export function QueueBoard() {
 						title="In Progress"
 						count={inProgress.length}
 						variant="progress"
-						footerPadding={footerHeight}
 					>
 						{inProgress.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
@@ -474,73 +464,37 @@ export function QueueBoard() {
 				</div>
 
 				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
-					<QueueColumn
-						title="Done"
-						count={done.length}
-						variant="done"
-						footerPadding={footerHeight}
-					>
+					<QueueColumn title="Done" count={done.length} variant="done">
 						{done.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
 								No completed generations
 							</p>
 						) : (
-							<>
-								{done.length > 0 && (
-									<div className="flex justify-end px-1">
-										<button
-											type="button"
-											onClick={handleRequeue}
-											className="text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-										>
-											Requeue all
-										</button>
-									</div>
-								)}
-								{done.map((p) => (
-									<QueueCard
-										key={p.id}
-										id={p.id}
-										name={p.name}
-										status={p.status}
-										coverUrl={
-											p.latest_r2_key
-												? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
-												: p.spotify_cover_url
-										}
-										progressData={p.progress_data}
-										lastGeneratedAt={p.last_generated_at}
-										selected={selectedIds.has(p.id)}
-										onSelect={toggleSelect}
-										onViewImage={
-											p.status === "generated" ? setModalPlaylistId : undefined
-										}
-										onRetry={p.status === "failed" ? handleRetry : undefined}
-									/>
-								))}
-							</>
+							done.map((p) => (
+								<QueueCard
+									key={p.id}
+									id={p.id}
+									name={p.name}
+									status={p.status}
+									coverUrl={
+										p.latest_r2_key
+											? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
+											: p.spotify_cover_url
+									}
+									progressData={p.progress_data}
+									lastGeneratedAt={p.last_generated_at}
+									selected={selectedIds.has(p.id)}
+									onSelect={toggleSelect}
+									onViewImage={
+										p.status === "generated" ? setModalPlaylistId : undefined
+									}
+									onRetry={p.status === "failed" ? handleRetry : undefined}
+								/>
+							))
 						)}
 					</QueueColumn>
 				</div>
 			</div>
-
-			{/* Sticky footer */}
-			<QueueFooter
-				ref={footerRef}
-				selectedPlaylists={selectedPlaylists}
-				runningPlaylists={runningPlaylists}
-				donePlaylists={donePlaylists}
-				onDeselect={toggleSelect}
-				onSelectAll={selectAll}
-				onClearSelection={clearSelection}
-				todoCount={todo.length}
-				styles={styles}
-				styleOverride={styleOverride}
-				onStyleChange={setStyleOverride}
-				onGenerate={handleBatchTrigger}
-				triggering={triggering}
-				onViewPlaylist={setModalPlaylistId}
-			/>
 
 			{/* Image review modal */}
 			{modalPlaylist && (

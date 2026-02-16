@@ -6,7 +6,6 @@ interface QueueColumnProps {
 	title: string;
 	count: number;
 	variant: "todo" | "scheduled" | "progress" | "done";
-	footerPadding?: number;
 	children: React.ReactNode;
 }
 
@@ -28,7 +27,6 @@ export function QueueColumn({
 	title,
 	count,
 	variant,
-	footerPadding = 128,
 	children,
 }: QueueColumnProps) {
 	const headingId = useId();
@@ -53,7 +51,6 @@ export function QueueColumn({
 			</div>
 			<div
 				className={`flex flex-col gap-[var(--space-sm)] rounded-[var(--radius-lg)] p-[var(--space-sm)] flex-1 overflow-y-auto min-h-0 ${variantColors[variant]}`}
-				style={{ paddingBottom: footerPadding + 16 }}
 			>
 				{children}
 			</div>
