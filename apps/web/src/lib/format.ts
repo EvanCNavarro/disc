@@ -6,6 +6,14 @@ export function formatDuration(ms: number | null): string {
 	return `${mins}m ${secs}s`;
 }
 
+export function formatTrackDuration(ms: number | undefined): string {
+	if (ms == null) return "";
+	const totalSeconds = Math.floor(ms / 1000);
+	const mins = Math.floor(totalSeconds / 60);
+	const secs = totalSeconds % 60;
+	return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
 export function formatCost(usd: number | null): string {
 	if (usd == null) return "\u2014";
 	return `$${usd.toFixed(4)}`;

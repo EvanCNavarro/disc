@@ -99,6 +99,8 @@ export interface PlaylistTrack {
 	name: string;
 	artist: string;
 	album: string;
+	albumImageUrl: string | null;
+	durationMs: number;
 }
 
 /**
@@ -110,7 +112,8 @@ export async function fetchPlaylistTracks(
 	accessToken: string,
 	limit: number = CONFIG.MAX_TRACKS_PER_PLAYLIST,
 ): Promise<PlaylistTrack[]> {
-	const fields = "items(track(id,name,artists(name),album(name)))";
+	const fields =
+		"items(track(id,name,artists(name),album(name,images),duration_ms))";
 	const url = `https://api.spotify.com/v1/playlists/${spotifyPlaylistId}/tracks?fields=${encodeURIComponent(fields)}&limit=${limit}`;
 
 	const response = await fetch(url, {
@@ -130,7 +133,11 @@ export async function fetchPlaylistTracks(
 				id: string;
 				name: string;
 				artists: Array<{ name: string }>;
-				album: { name: string };
+				album: {
+					name: string;
+					images?: Array<{ url: string; width: number; height: number }>;
+				};
+				duration_ms: number;
 			} | null;
 		}>;
 	};
@@ -150,5 +157,7 @@ export async function fetchPlaylistTracks(
 			name: item.track.name,
 			artist: item.track.artists.map((a) => a.name).join(", "),
 			album: item.track.album.name,
+			albumImageUrl: item.track.album.images?.[0]?.url ?? null,
+			durationMs: item.track.duration_ms,
 		}));
 }

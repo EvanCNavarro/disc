@@ -9,14 +9,25 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { RepeatIcon } from "@hugeicons-pro/core-stroke-rounded";
 import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatCost, formatDuration, formatTimestamp } from "@/lib/format";
+import {
+	formatCost,
+	formatDuration,
+	formatTimestamp,
+	formatTrackDuration,
+} from "@/lib/format";
 
 interface Analysis {
 	id: string;
 	chosen_object: string;
 	aesthetic_context: string;
 	style_name: string;
-	track_snapshot: Array<{ name: string; artist: string; album: string }>;
+	track_snapshot: Array<{
+		name: string;
+		artist: string;
+		album: string;
+		albumImageUrl?: string | null;
+		durationMs?: number;
+	}>;
 	track_extractions: TrackExtraction[];
 	convergence_result: ConvergenceResult;
 	tracks_added: string[] | null;
@@ -253,58 +264,86 @@ export function PlaylistDetailClient({
 			)}
 
 			{/* Track Listing */}
-			{analysis && analysis.track_extractions.length > 0 && (
-				<section className="flex flex-col gap-[var(--space-md)]">
-					<h2 className="text-lg font-semibold">
-						Track Analysis ({analysis.track_snapshot.length} tracks)
-					</h2>
-					<div className="overflow-x-auto">
-						<table className="w-full text-sm">
-							<thead>
-								<tr className="border-b border-[var(--color-border-subtle)] text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
-									<th className="pb-2 pr-3">Track</th>
-									<th className="pb-2 pr-3">Artist</th>
-									<th className="pb-2">Objects</th>
-								</tr>
-							</thead>
-							<tbody>
-								{analysis.track_extractions.map((te) => (
-									<tr
-										key={`${te.trackName}-${te.artist}`}
-										className="border-b border-[var(--color-border-subtle)] last:border-0"
-									>
-										<td className="py-2 pr-3 max-w-[10rem] truncate font-medium">
-											{te.trackName}
-										</td>
-										<td className="py-2 pr-3 max-w-[8rem] truncate text-[var(--color-text-secondary)]">
-											{te.artist}
-										</td>
-										<td className="py-2">
-											<div className="flex flex-wrap gap-1">
-												{te.objects.map((obj) => (
-													<span
-														key={obj.object}
-														className={`rounded-[var(--radius-pill)] px-1.5 py-0.5 text-xs ${
-															obj.tier === "high"
-																? "bg-green-100 text-green-800"
-																: obj.tier === "medium"
-																	? "bg-yellow-100 text-yellow-800"
-																	: "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
-														}`}
-														title={obj.reasoning}
-													>
-														{obj.object}
-													</span>
-												))}
-											</div>
-										</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
-					</div>
-				</section>
-			)}
+			{analysis &&
+				analysis.track_extractions.length > 0 &&
+				(() => {
+					// Build lookup from snapshot for enriched metadata
+					const snapshotMap = new Map(
+						analysis.track_snapshot.map((t) => [`${t.name}|||${t.artist}`, t]),
+					);
+					return (
+						<section className="flex flex-col gap-[var(--space-md)]">
+							<h2 className="text-lg font-semibold">
+								Track Analysis ({analysis.track_snapshot.length} tracks)
+							</h2>
+							<div className="overflow-x-auto">
+								<table className="w-full text-sm">
+									<thead>
+										<tr className="border-b border-[var(--color-border-subtle)] text-left text-xs font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
+											<th className="pb-2 pr-3">Track</th>
+											<th className="pb-2 pr-3">Artist</th>
+											<th className="pb-2 pr-3">Duration</th>
+											<th className="pb-2">Objects</th>
+										</tr>
+									</thead>
+									<tbody>
+										{analysis.track_extractions.map((te) => {
+											const snap = snapshotMap.get(
+												`${te.trackName}|||${te.artist}`,
+											);
+											return (
+												<tr
+													key={`${te.trackName}-${te.artist}`}
+													className="border-b border-[var(--color-border-subtle)] last:border-0"
+												>
+													<td className="py-2 pr-3 font-medium">
+														<div className="flex items-center gap-2 max-w-[12rem]">
+															{snap?.albumImageUrl && (
+																// biome-ignore lint/performance/noImgElement: external Spotify CDN URL
+																<img
+																	src={snap.albumImageUrl}
+																	alt=""
+																	className="w-8 h-8 shrink-0 rounded-[var(--radius-sm)] object-cover"
+																	loading="lazy"
+																/>
+															)}
+															<span className="truncate">{te.trackName}</span>
+														</div>
+													</td>
+													<td className="py-2 pr-3 max-w-[8rem] truncate text-[var(--color-text-secondary)]">
+														{te.artist}
+													</td>
+													<td className="py-2 pr-3 text-[var(--color-text-muted)] tabular-nums">
+														{formatTrackDuration(snap?.durationMs)}
+													</td>
+													<td className="py-2">
+														<div className="flex flex-wrap gap-1">
+															{te.objects.map((obj) => (
+																<span
+																	key={obj.object}
+																	className={`rounded-[var(--radius-pill)] px-1.5 py-0.5 text-xs ${
+																		obj.tier === "high"
+																			? "bg-green-100 text-green-800"
+																			: obj.tier === "medium"
+																				? "bg-yellow-100 text-yellow-800"
+																				: "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
+																	}`}
+																	title={obj.reasoning}
+																>
+																	{obj.object}
+																</span>
+															))}
+														</div>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</div>
+						</section>
+					);
+				})()}
 
 			{/* Object Scores */}
 			{analysis &&

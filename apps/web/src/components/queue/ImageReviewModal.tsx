@@ -3,7 +3,7 @@
 import type { GenerationVersion, PipelineProgress } from "@disc/shared";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { formatRelative } from "@/lib/format";
+import { formatTimestamp } from "@/lib/format";
 import { AnalysisView } from "./AnalysisView";
 import { PipelineStepper } from "./PipelineStepper";
 
@@ -288,7 +288,7 @@ function GenerationCard({
 
 			{/* Metadata */}
 			<span className="text-xs text-[var(--color-text-muted)]">
-				{generation.style_name} · {formatRelative(generation.created_at)}
+				{generation.style_name} · {formatTimestamp(generation.created_at)}
 			</span>
 			<span className="inline-flex w-fit items-center rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-1.5 py-0.5 text-[10px] text-[var(--color-text-secondary)] truncate max-w-full">
 				{generation.symbolic_object}

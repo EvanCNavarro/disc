@@ -23,7 +23,13 @@ interface PlaylistDetailData {
 		chosen_object: string;
 		aesthetic_context: string;
 		style_name: string;
-		track_snapshot: Array<{ name: string; artist: string; album: string }>;
+		track_snapshot: Array<{
+			name: string;
+			artist: string;
+			album: string;
+			albumImageUrl?: string | null;
+			durationMs?: number;
+		}>;
 		track_extractions: TrackExtraction[];
 		convergence_result: ConvergenceResult;
 		tracks_added: string[] | null;
