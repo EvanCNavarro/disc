@@ -1,6 +1,57 @@
 {
 	"versions": [
 		{
+			"version": "0.7.0",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Kuro Gin Orenjiiro style: FLUX LoRA trained on 16 reference images (60% black / 30% silver / 10% orange, faceted stone, amber backlight)"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Seed all 7 styles into D1 database — styles table was previously empty"
+				},
+				{
+					"type": "feat",
+					"scope": "dashboard",
+					"message": "Generation history table with stale-while-revalidate caching, cost tracking, and breakdown tooltips"
+				},
+				{
+					"type": "feat",
+					"scope": "playlists",
+					"message": "Playlist detail page with full analysis transparency: track extractions, convergence, object scoring, generation history"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Song-level extraction caching via song_extractions table — skip LLM calls for previously analyzed tracks"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Object scoring with tier weights (high=3, medium=2, low=1) aggregated into convergence prompt"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Cost tracking end-to-end: token counts, per-step breakdown, total cost per generation"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Dark-mode safe colors replacing hardcoded Tailwind green/yellow/red"
+				},
+				{
+					"type": "fix",
+					"scope": "security",
+					"message": "R2 key path validation in image proxy — reject traversal and non-PNG paths"
+				}
+			]
+		},
+		{
 			"version": "0.6.1",
 			"date": "2026-02-15",
 			"entries": [
