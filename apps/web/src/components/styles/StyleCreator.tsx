@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ImageUpload } from "./ImageUpload";
 
@@ -15,16 +16,19 @@ const toBase64 = (file: File): Promise<string> =>
 	});
 
 export function StyleCreator() {
+	const router = useRouter();
 	const [name, setName] = useState("");
 	const [images, setImages] = useState<File[]>([]);
 	const [notes, setNotes] = useState("");
 	const [status, setStatus] = useState<"idle" | "analyzing">("idle");
+	const [error, setError] = useState<string | null>(null);
 
 	const canSubmit =
 		name.trim().length > 0 && images.length > 0 && status !== "analyzing";
 
 	const handleAnalyze = async () => {
 		if (!canSubmit) return;
+		setError(null);
 		setStatus("analyzing");
 
 		try {
@@ -42,13 +46,19 @@ export function StyleCreator() {
 			});
 
 			if (!response.ok) {
+				const body = await response.json().catch(() => null);
+				const message =
+					(body as { error?: string } | null)?.error ??
+					"Analysis failed. Please try again.";
+				setError(message);
 				setStatus("idle");
 				return;
 			}
 
 			const { styleId } = (await response.json()) as { styleId: string };
-			window.location.href = `/styles/${styleId}`;
+			router.push(`/styles/${styleId}`);
 		} catch {
+			setError("Network error. Please check your connection and try again.");
 			setStatus("idle");
 		}
 	};
@@ -110,6 +120,11 @@ export function StyleCreator() {
 					>
 						{status === "analyzing" ? "Analyzing style..." : "Analyze & Create"}
 					</button>
+					{error && (
+						<p className="text-center text-sm text-[var(--color-destructive)]">
+							{error}
+						</p>
+					)}
 				</div>
 			</div>
 		</div>
