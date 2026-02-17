@@ -77,6 +77,7 @@ export interface PipelineEnv {
 export interface PipelineOptions {
 	triggerType?: "manual" | "cron";
 	revisionNotes?: string;
+	customObject?: string;
 }
 
 /**
@@ -158,179 +159,236 @@ export async function generateForPlaylist(
 			);
 		}
 
-		checkTimeout();
-		// ── Step 4: Fetch lyrics (parallel, non-blocking failures) ──
 		await tracker.advance("fetch_tracks", {
 			trackCount: tracks.length,
 			trackNames: tracks.map((t) => `${t.name} — ${t.artist}`),
 		});
-		await tracker.advance("fetch_lyrics");
-		console.log("[Pipeline] Fetching lyrics...");
-		const lyricsResults = await fetchLyricsBatch(tracks, env.DB);
-		const lyricsFoundCount = lyricsResults.filter((r) => r.found).length;
-		console.log(
-			`[Pipeline] Lyrics found for ${lyricsFoundCount}/${tracks.length} tracks`,
-		);
 
-		checkTimeout();
-		// ── Step 5: Extract tiered objects via LLM (parallel per-track) ──
-		await tracker.advance("fetch_lyrics", {
-			found: lyricsFoundCount,
-			total: tracks.length,
-			tracks: lyricsResults.map((r) => ({
-				name: r.trackName,
-				artist: r.artist,
-				found: r.found,
-				snippet: r.lyrics ? r.lyrics.slice(0, 120) : null,
-			})),
-		});
-		await tracker.advance("extract_themes");
-		console.log("[Pipeline] Extracting themes (parallel per-track)...");
-		const tracksWithLyrics = tracks.map((t, i) => ({
-			...t,
-			lyrics: lyricsResults[i].lyrics,
-			lyricsFound: lyricsResults[i].found,
-		}));
+		// When a custom object is provided, skip lyrics/extraction/convergence
+		// and jump straight to image generation with the user-supplied subject.
+		let subject: string;
+		let chosenObject: string;
+		let chosenAestheticContext: string;
+		let extractions: Awaited<ReturnType<typeof extractThemes>>["extractions"] =
+			[];
+		let convergenceResult: unknown = null;
+		let lyricsFoundCount = 0;
 
-		const extractResult = await extractThemes(
-			tracksWithLyrics,
-			env.OPENAI_API_KEY,
-			// Real-time progress callback — fires after each track completes
-			async (completed, total, completedExtractions, tokensUsed) => {
-				await tracker.advance("extract_themes", {
-					completed,
-					total,
-					objectCount: completedExtractions.flatMap((e) => e.objects).length,
-					topObjects: completedExtractions
-						.flatMap((e) => e.objects)
-						.filter((o) => o.tier === "high")
-						.slice(0, 8)
-						.map((o) => o.object),
-					tokensUsed,
-					perTrack: completedExtractions.map((e) => ({
-						trackName: e.trackName,
-						artist: e.artist,
-						objects: e.objects.map((o) => ({
-							object: o.object,
-							tier: o.tier,
-							reasoning: o.reasoning.slice(0, 80),
-						})),
-					})),
-				});
-			},
-			env.DB,
-		);
-		const { extractions } = extractResult;
-		extractTokensIn = extractResult.inputTokens;
-		extractTokensOut = extractResult.outputTokens;
-		if (extractResult.cacheHits > 0) {
+		if (options.customObject) {
 			console.log(
-				`[Pipeline] Extraction cache: ${extractResult.cacheHits} hits, ${extractions.length - extractResult.cacheHits} fresh`,
+				`[Pipeline] Custom object override: "${options.customObject}"`,
 			);
-		}
-		console.log(
-			`[Pipeline] Extracted objects for ${extractions.length} tracks (${extractTokensIn}+${extractTokensOut} tokens)`,
-		);
+			chosenObject = options.customObject;
+			chosenAestheticContext = "user-specified";
+			// Fast-forward progress through skipped steps
+			await tracker.advance("fetch_lyrics");
+			await tracker.advance("fetch_lyrics", {
+				found: 0,
+				total: tracks.length,
+				tracks: [],
+			});
+			await tracker.advance("extract_themes");
+			await tracker.advance("extract_themes", {
+				completed: 0,
+				total: 0,
+				objectCount: 0,
+				topObjects: [],
+				tokensUsed: 0,
+				perTrack: [],
+			});
+			await tracker.advance("select_theme");
+			await tracker.advance("select_theme", {
+				chosenObject: options.customObject,
+				aestheticContext: "user-specified",
+				collisionNotes: "",
+				candidates: [
+					{
+						object: options.customObject,
+						aestheticContext: "user-specified",
+						reasoning: "Custom object override",
+						rank: 1,
+					},
+				],
+			});
+			await tracker.advance("generate_image");
 
-		checkTimeout();
-		// ── Step 6: Load claimed objects for collision detection ──
-		const claimedResult = await env.DB.prepare(
-			`SELECT id, user_id, playlist_id, object_name, aesthetic_context, source_generation_id, superseded_at, created_at
-			 FROM claimed_objects
-			 WHERE user_id = ? AND playlist_id != ? AND superseded_at IS NULL`,
-		)
-			.bind(playlist.user_id, playlist.id)
-			.all<DbClaimedObject>();
+			const revisionPrefix = options.revisionNotes
+				? `Revision guidance: ${options.revisionNotes}. `
+				: "";
+			subject = `${revisionPrefix}${options.customObject}`;
+		} else {
+			checkTimeout();
+			// ── Step 4: Fetch lyrics (parallel, non-blocking failures) ──
+			await tracker.advance("fetch_lyrics");
+			console.log("[Pipeline] Fetching lyrics...");
+			const lyricsResults = await fetchLyricsBatch(tracks, env.DB);
+			lyricsFoundCount = lyricsResults.filter((r) => r.found).length;
+			console.log(
+				`[Pipeline] Lyrics found for ${lyricsFoundCount}/${tracks.length} tracks`,
+			);
 
-		const exclusions = claimedResult.results;
-		console.log(`[Pipeline] ${exclusions.length} claimed objects to avoid`);
-
-		// ── Step 7: Convergence + selection ──
-		// Truncate reasoning in progress data to keep D1 writes small
-		await tracker.advance("extract_themes", {
-			completed: extractions.length,
-			total: tracks.length,
-			objectCount: extractions.flatMap((e) => e.objects).length,
-			topObjects: extractions
-				.flatMap((e) => e.objects)
-				.filter((o) => o.tier === "high")
-				.slice(0, 8)
-				.map((o) => o.object),
-			tokensUsed: extractTokensIn + extractTokensOut,
-			perTrack: extractions.map((e) => ({
-				trackName: e.trackName,
-				artist: e.artist,
-				objects: e.objects.map((o) => ({
-					object: o.object,
-					tier: o.tier,
-					reasoning: o.reasoning.slice(0, 80),
+			checkTimeout();
+			// ── Step 5: Extract tiered objects via LLM (parallel per-track) ──
+			await tracker.advance("fetch_lyrics", {
+				found: lyricsFoundCount,
+				total: tracks.length,
+				tracks: lyricsResults.map((r) => ({
+					name: r.trackName,
+					artist: r.artist,
+					found: r.found,
+					snippet: r.lyrics ? r.lyrics.slice(0, 120) : null,
 				})),
-			})),
-		});
-		await tracker.advance("select_theme");
-		const totalObjects = extractions.flatMap((e) => e.objects).length;
-		console.log(
-			`[Pipeline] Running convergence... (${extractions.length} tracks, ${totalObjects} objects, ${exclusions.length} exclusions)`,
-		);
+			});
+			await tracker.advance("extract_themes");
+			console.log("[Pipeline] Extracting themes (parallel per-track)...");
+			const tracksWithLyrics = tracks.map((t, i) => ({
+				...t,
+				lyrics: lyricsResults[i].lyrics,
+				lyricsFound: lyricsResults[i].found,
+			}));
 
-		let convergence: Awaited<ReturnType<typeof convergeAndSelect>>["result"];
-
-		try {
-			const convResult = await convergeAndSelect(
-				playlist.name,
-				extractions,
-				exclusions,
+			const extractResult = await extractThemes(
+				tracksWithLyrics,
 				env.OPENAI_API_KEY,
+				// Real-time progress callback — fires after each track completes
+				async (completed, total, completedExtractions, tokensUsed) => {
+					await tracker.advance("extract_themes", {
+						completed,
+						total,
+						objectCount: completedExtractions.flatMap((e) => e.objects).length,
+						topObjects: completedExtractions
+							.flatMap((e) => e.objects)
+							.filter((o) => o.tier === "high")
+							.slice(0, 8)
+							.map((o) => o.object),
+						tokensUsed,
+						perTrack: completedExtractions.map((e) => ({
+							trackName: e.trackName,
+							artist: e.artist,
+							objects: e.objects.map((o) => ({
+								object: o.object,
+								tier: o.tier,
+								reasoning: o.reasoning.slice(0, 80),
+							})),
+						})),
+					});
+				},
+				env.DB,
 			);
-			convergence = convResult.result;
-			convTokensIn = convResult.inputTokens;
-			convTokensOut = convResult.outputTokens;
-		} catch (convError) {
-			const msg =
-				convError instanceof Error ? convError.message : String(convError);
-			console.error(`[Pipeline] Convergence FAILED: ${msg}`);
-			throw new Error(`Convergence failed: ${msg}`);
+			extractions = extractResult.extractions;
+			extractTokensIn = extractResult.inputTokens;
+			extractTokensOut = extractResult.outputTokens;
+			if (extractResult.cacheHits > 0) {
+				console.log(
+					`[Pipeline] Extraction cache: ${extractResult.cacheHits} hits, ${extractions.length - extractResult.cacheHits} fresh`,
+				);
+			}
+			console.log(
+				`[Pipeline] Extracted objects for ${extractions.length} tracks (${extractTokensIn}+${extractTokensOut} tokens)`,
+			);
+
+			checkTimeout();
+			// ── Step 6: Load claimed objects for collision detection ──
+			const claimedResult = await env.DB.prepare(
+				`SELECT id, user_id, playlist_id, object_name, aesthetic_context, source_generation_id, superseded_at, created_at
+				 FROM claimed_objects
+				 WHERE user_id = ? AND playlist_id != ? AND superseded_at IS NULL`,
+			)
+				.bind(playlist.user_id, playlist.id)
+				.all<DbClaimedObject>();
+
+			const exclusions = claimedResult.results;
+			console.log(`[Pipeline] ${exclusions.length} claimed objects to avoid`);
+
+			// ── Step 7: Convergence + selection ──
+			await tracker.advance("extract_themes", {
+				completed: extractions.length,
+				total: tracks.length,
+				objectCount: extractions.flatMap((e) => e.objects).length,
+				topObjects: extractions
+					.flatMap((e) => e.objects)
+					.filter((o) => o.tier === "high")
+					.slice(0, 8)
+					.map((o) => o.object),
+				tokensUsed: extractTokensIn + extractTokensOut,
+				perTrack: extractions.map((e) => ({
+					trackName: e.trackName,
+					artist: e.artist,
+					objects: e.objects.map((o) => ({
+						object: o.object,
+						tier: o.tier,
+						reasoning: o.reasoning.slice(0, 80),
+					})),
+				})),
+			});
+			await tracker.advance("select_theme");
+			const totalObjects = extractions.flatMap((e) => e.objects).length;
+			console.log(
+				`[Pipeline] Running convergence... (${extractions.length} tracks, ${totalObjects} objects, ${exclusions.length} exclusions)`,
+			);
+
+			let convergence: Awaited<ReturnType<typeof convergeAndSelect>>["result"];
+
+			try {
+				const convResult = await convergeAndSelect(
+					playlist.name,
+					extractions,
+					exclusions,
+					env.OPENAI_API_KEY,
+				);
+				convergence = convResult.result;
+				convergenceResult = convergence;
+				convTokensIn = convResult.inputTokens;
+				convTokensOut = convResult.outputTokens;
+			} catch (convError) {
+				const msg =
+					convError instanceof Error ? convError.message : String(convError);
+				console.error(`[Pipeline] Convergence FAILED: ${msg}`);
+				throw new Error(`Convergence failed: ${msg}`);
+			}
+
+			if (
+				!convergence.candidates?.length ||
+				convergence.selectedIndex < 0 ||
+				convergence.selectedIndex >= convergence.candidates.length
+			) {
+				console.error(
+					`[Pipeline] Convergence invalid response:`,
+					JSON.stringify(convergence).slice(0, 500),
+				);
+				throw new Error(
+					`Convergence invalid: ${convergence.candidates?.length ?? 0} candidates, selectedIndex=${convergence.selectedIndex}`,
+				);
+			}
+			const selected = convergence.candidates[convergence.selectedIndex];
+			chosenObject = selected.object;
+			chosenAestheticContext = selected.aestheticContext;
+
+			console.log(
+				`[Pipeline] Selected: "${selected.object}" — ${selected.aestheticContext.slice(0, 80)}...`,
+			);
+			console.log(
+				`[Pipeline] LLM tokens: extract=${extractTokensIn}+${extractTokensOut}, converge=${convTokensIn}+${convTokensOut}`,
+			);
+
+			// ── Step 8: Build enriched prompt and generate image ──
+			await tracker.advance("select_theme", {
+				chosenObject: selected.object,
+				aestheticContext: selected.aestheticContext,
+				collisionNotes: convergence.collisionNotes,
+				candidates: convergence.candidates.map((c) => ({
+					object: c.object,
+					aestheticContext: c.aestheticContext,
+					reasoning: c.reasoning,
+					rank: c.rank,
+				})),
+			});
+			await tracker.advance("generate_image");
+			const revisionPrefix = options.revisionNotes
+				? `Revision guidance: ${options.revisionNotes}. `
+				: "";
+			subject = `${revisionPrefix}${selected.object}, ${selected.aestheticContext}`;
 		}
-
-		if (
-			!convergence.candidates?.length ||
-			convergence.selectedIndex < 0 ||
-			convergence.selectedIndex >= convergence.candidates.length
-		) {
-			console.error(
-				`[Pipeline] Convergence invalid response:`,
-				JSON.stringify(convergence).slice(0, 500),
-			);
-			throw new Error(
-				`Convergence invalid: ${convergence.candidates?.length ?? 0} candidates, selectedIndex=${convergence.selectedIndex}`,
-			);
-		}
-		const selected = convergence.candidates[convergence.selectedIndex];
-
-		console.log(
-			`[Pipeline] Selected: "${selected.object}" — ${selected.aestheticContext.slice(0, 80)}...`,
-		);
-		console.log(
-			`[Pipeline] LLM tokens: extract=${extractTokensIn}+${extractTokensOut}, converge=${convTokensIn}+${convTokensOut}`,
-		);
-
-		// ── Step 8: Build enriched prompt and generate image ──
-		await tracker.advance("select_theme", {
-			chosenObject: selected.object,
-			aestheticContext: selected.aestheticContext,
-			collisionNotes: convergence.collisionNotes,
-			candidates: convergence.candidates.map((c) => ({
-				object: c.object,
-				aestheticContext: c.aestheticContext,
-				reasoning: c.reasoning,
-				rank: c.rank,
-			})),
-		});
-		await tracker.advance("generate_image");
-		const revisionPrefix = options.revisionNotes
-			? `Revision guidance: ${options.revisionNotes}. `
-			: "";
-		const subject = `${revisionPrefix}${selected.object}, ${selected.aestheticContext}`;
 		console.log(
 			`[Pipeline] Generating image for "${playlist.name}" with style "${style.name}"`,
 		);
@@ -358,7 +416,7 @@ export async function generateForPlaylist(
 				playlistName: playlist.name,
 				styleName: style.name,
 				predictionId,
-				chosenObject: selected.object,
+				chosenObject: chosenObject,
 			},
 		});
 
@@ -398,9 +456,9 @@ export async function generateForPlaylist(
 				playlist.id,
 				JSON.stringify(tracks),
 				JSON.stringify(extractions),
-				JSON.stringify(convergence),
-				selected.object,
-				selected.aestheticContext,
+				JSON.stringify(convergenceResult),
+				chosenObject,
+				chosenAestheticContext,
 				style.id,
 				changeDetection ? JSON.stringify(changeDetection.tracksAdded) : null,
 				changeDetection ? JSON.stringify(changeDetection.tracksRemoved) : null,
@@ -431,8 +489,8 @@ export async function generateForPlaylist(
 				claimedObjectId,
 				playlist.user_id,
 				playlist.id,
-				selected.object,
-				selected.aestheticContext,
+				chosenObject,
+				chosenAestheticContext,
 				generationId,
 			)
 			.run();
@@ -490,7 +548,7 @@ export async function generateForPlaylist(
 			 WHERE id = ?`,
 		)
 			.bind(
-				selected.object,
+				chosenObject,
 				prompt,
 				predictionId,
 				r2Key,

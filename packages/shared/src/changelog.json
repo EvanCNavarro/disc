@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.8.11",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Custom object override in image review modal — specify your own subject to bypass AI extraction"
+				}
+			]
+		},
+		{
 			"version": "0.8.10",
 			"date": "2026-02-16",
 			"entries": [

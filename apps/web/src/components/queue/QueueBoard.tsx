@@ -255,28 +255,32 @@ export function QueueBoard() {
 	);
 
 	// Modal handlers
-	const handleRerun = useCallback(async () => {
-		if (!modalPlaylist) return;
-		try {
-			await fetch(
-				`/api/playlists/${modalPlaylist.spotify_playlist_id}/regenerate`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({
-						mode: "rerun",
-						styleId: styleOverride || undefined,
-					}),
-				},
-			);
-			await fetchData();
-		} catch {
-			// Error handling via polling
-		}
-	}, [modalPlaylist, styleOverride, fetchData]);
+	const handleRerun = useCallback(
+		async (customObject?: string) => {
+			if (!modalPlaylist) return;
+			try {
+				await fetch(
+					`/api/playlists/${modalPlaylist.spotify_playlist_id}/regenerate`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							mode: "rerun",
+							styleId: styleOverride || undefined,
+							customObject: customObject || undefined,
+						}),
+					},
+				);
+				await fetchData();
+			} catch {
+				// Error handling via polling
+			}
+		},
+		[modalPlaylist, styleOverride, fetchData],
+	);
 
 	const handleRevise = useCallback(
-		async (notes: string) => {
+		async (notes: string, customObject?: string) => {
 			if (!modalPlaylist) return;
 			try {
 				await fetch(
@@ -288,6 +292,7 @@ export function QueueBoard() {
 							mode: "revision",
 							notes,
 							styleId: styleOverride || undefined,
+							customObject: customObject || undefined,
 						}),
 					},
 				);

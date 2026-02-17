@@ -17,8 +17,8 @@ interface ImageReviewModalProps {
 	generationsLoading: boolean;
 	processing: boolean;
 	progress: PipelineProgress | null;
-	onRerun: () => void;
-	onRevise: (notes: string) => void;
+	onRerun: (customObject?: string) => void;
+	onRevise: (notes: string, customObject?: string) => void;
 }
 
 export function ImageReviewModal({
@@ -35,6 +35,7 @@ export function ImageReviewModal({
 	const dialogRef = useRef<HTMLDialogElement>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const [notes, setNotes] = useState("");
+	const [customObject, setCustomObject] = useState("");
 	const [activeTab, setActiveTab] = useState<"gallery" | "analysis">("gallery");
 
 	useEffect(() => {
@@ -58,15 +59,23 @@ export function ImageReviewModal({
 
 	const handleClose = useCallback(() => {
 		setNotes("");
+		setCustomObject("");
 		onClose();
 	}, [onClose]);
 
-	const handleRevise = useCallback(() => {
+	const handleRerunClick = useCallback(() => {
+		onRerun(customObject.trim() || undefined);
+		setCustomObject("");
+		setNotes("");
+	}, [customObject, onRerun]);
+
+	const handleReviseClick = useCallback(() => {
 		if (notes.trim()) {
-			onRevise(notes.trim());
+			onRevise(notes.trim(), customObject.trim() || undefined);
 			setNotes("");
+			setCustomObject("");
 		}
-	}, [notes, onRevise]);
+	}, [notes, customObject, onRevise]);
 
 	const total = generations.length;
 
@@ -190,6 +199,29 @@ export function ImageReviewModal({
 							</div>
 						)}
 
+						{/* Custom object override */}
+						<div className="flex flex-col gap-[var(--space-xs)]">
+							<label
+								htmlFor="custom-object"
+								className="text-sm font-medium text-[var(--color-text-secondary)]"
+							>
+								Custom object (optional)
+							</label>
+							<input
+								id="custom-object"
+								type="text"
+								value={customObject}
+								onChange={(e) => setCustomObject(e.target.value)}
+								placeholder='e.g. "a vintage jukebox with neon tubes" — skips AI extraction'
+								disabled={processing}
+								className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-faint)] transition-colors focus:border-[var(--color-accent)] focus:outline-none disabled:opacity-50"
+							/>
+							<span className="text-xs text-[var(--color-text-faint)]">
+								Provide your own subject — bypasses lyrics analysis and theme
+								extraction
+							</span>
+						</div>
+
 						{/* Revision notes */}
 						<div className="flex flex-col gap-[var(--space-xs)]">
 							<label
@@ -217,15 +249,19 @@ export function ImageReviewModal({
 						<div className="flex items-center justify-end gap-[var(--space-sm)]">
 							<button
 								type="button"
-								onClick={onRerun}
+								onClick={handleRerunClick}
 								disabled={processing}
 								className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] disabled:opacity-50"
 							>
-								{processing ? "Processing..." : "Full Re-run"}
+								{processing
+									? "Processing..."
+									: customObject.trim()
+										? "Generate with Object"
+										: "Full Re-run"}
 							</button>
 							<button
 								type="button"
-								onClick={handleRevise}
+								onClick={handleReviseClick}
 								disabled={processing || !notes.trim()}
 								className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
 							>

@@ -111,6 +111,7 @@ export default {
 					limit?: number;
 					style_id?: string;
 					revision_notes?: string;
+					custom_object?: string;
 					trigger_type?: string;
 				};
 
@@ -121,6 +122,7 @@ export default {
 					playlistIds: body.playlist_ids ?? null,
 					styleId: body.style_id ?? null,
 					revisionNotes: body.revision_notes ?? null,
+					customObject: body.custom_object ?? null,
 					triggerType: (body.trigger_type as "manual" | "cron") ?? "manual",
 				};
 
@@ -315,6 +317,7 @@ interface TriggerOptions {
 	playlistIds: string[] | null;
 	styleId: string | null;
 	revisionNotes: string | null;
+	customObject: string | null;
 	triggerType: "manual" | "cron";
 }
 
@@ -445,6 +448,7 @@ async function executeTrigger(
 			{
 				triggerType: options.triggerType,
 				revisionNotes: options.revisionNotes ?? undefined,
+				customObject: options.customObject ?? undefined,
 			},
 		);
 	}
