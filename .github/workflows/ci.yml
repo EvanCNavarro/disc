@@ -96,16 +96,19 @@ jobs:
         env:
           EXPECTED_VERSION: ${{ steps.version.outputs.expected }}
         run: |
-          echo "Checking https://disc.400.dev/api/version..."
-          RESPONSE=$(curl -sf https://disc.400.dev/api/version)
-          LIVE_VERSION=$(echo "$RESPONSE" | node -e "
-            const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-            console.log(d.version);
-          ")
-          echo "Live version: $LIVE_VERSION"
-          echo "Expected version: $EXPECTED_VERSION"
-          if [ "$LIVE_VERSION" != "$EXPECTED_VERSION" ]; then
-            echo "::error::Version mismatch! Live=$LIVE_VERSION Expected=$EXPECTED_VERSION"
-            exit 1
-          fi
-          echo "Version verified: $LIVE_VERSION"
+          echo "Verifying https://disc.400.dev/api/version = $EXPECTED_VERSION"
+          for attempt in $(seq 1 10); do
+            RESPONSE=$(curl -sf https://disc.400.dev/api/version || echo '{}')
+            LIVE_VERSION=$(echo "$RESPONSE" | node -e "
+              const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              console.log(d.version || 'unknown');
+            ")
+            echo "Attempt $attempt/10: live=$LIVE_VERSION expected=$EXPECTED_VERSION"
+            if [ "$LIVE_VERSION" = "$EXPECTED_VERSION" ]; then
+              echo "Version verified: $LIVE_VERSION"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Version mismatch after 10 attempts. Live=$LIVE_VERSION Expected=$EXPECTED_VERSION"
+          exit 1

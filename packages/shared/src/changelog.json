@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.8.5",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "ci",
+					"message": "Add retry logic to deploy verification for CDN propagation lag"
+				}
+			]
+		},
+		{
 			"version": "0.8.4",
 			"date": "2026-02-17",
 			"entries": [
