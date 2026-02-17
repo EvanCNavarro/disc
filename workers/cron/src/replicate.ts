@@ -13,7 +13,7 @@ const REPLICATE_API_BASE = "https://api.replicate.com/v1";
 interface ReplicatePrediction {
 	id: string;
 	status: "starting" | "processing" | "succeeded" | "failed" | "canceled";
-	output: string[] | null;
+	output: string[] | string | null;
 	error: string | null;
 }
 
@@ -172,11 +172,15 @@ export async function generateImage(
 		prediction = await pollPrediction(prediction.id, apiToken);
 	}
 
-	if (!prediction.output || prediction.output.length === 0) {
+	if (!prediction.output) {
 		throw new Error("Replicate returned no output");
 	}
 
-	const imageUrl = prediction.output[0];
+	// Replicate returns output as string for some models (flux-2-pro)
+	// and as string[] for others (flux-dev). Normalize to string.
+	const imageUrl = Array.isArray(prediction.output)
+		? prediction.output[0]
+		: prediction.output;
 	console.log(`[Replicate] Image generated: ${prediction.id}`);
 
 	return { imageUrl, predictionId: prediction.id, prompt };

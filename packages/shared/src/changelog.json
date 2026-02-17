@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.8.4",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "pipeline",
+					"message": "Fix image generation crash for flux-2-pro models (output is string, not array)"
+				}
+			]
+		},
+		{
 			"version": "0.8.3",
 			"date": "2026-02-17",
 			"entries": [
