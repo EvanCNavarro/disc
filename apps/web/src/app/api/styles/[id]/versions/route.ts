@@ -3,6 +3,36 @@ import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { generateThumbnail } from "@/lib/generate-thumbnail";
 
+const WORKER_URL = process.env.DISC_WORKER_URL;
+const WORKER_TOKEN = process.env.WORKER_AUTH_TOKEN;
+
+/** Download an image and upload to R2 via the worker. Returns R2 key on success, null on failure. */
+async function persistToR2(
+	imageUrl: string,
+	r2Key: string,
+): Promise<string | null> {
+	if (!WORKER_URL || !WORKER_TOKEN) return null;
+	try {
+		const imgResp = await fetch(imageUrl);
+		if (!imgResp.ok) return null;
+		const bytes = await imgResp.arrayBuffer();
+		const uploadResp = await fetch(
+			`${WORKER_URL}/upload?key=${encodeURIComponent(r2Key)}`,
+			{
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${WORKER_TOKEN}`,
+					"Content-Type": "image/png",
+				},
+				body: bytes,
+			},
+		);
+		return uploadResp.ok ? r2Key : null;
+	} catch {
+		return null;
+	}
+}
+
 /** POST /api/styles/[id]/versions -- saves a version snapshot */
 export async function POST(
 	request: Request,
@@ -32,6 +62,14 @@ export async function POST(
 
 	const versionId = crypto.randomUUID();
 
+	// Persist preview images to R2 (Replicate URLs expire after ~1 hour)
+	const r2Keys = await Promise.all(
+		(previewUrls ?? []).map((url, i) =>
+			persistToR2(url, `styles/${id}/versions/${versionId}/${i}.png`),
+		),
+	);
+	const persistedUrls = r2Keys.filter((k): k is string => k !== null);
+
 	// Save to style_versions
 	await queryD1(
 		`INSERT INTO style_versions (id, style_id, version, prompt_template, heuristics, preview_urls, notes)
@@ -42,7 +80,7 @@ export async function POST(
 			version,
 			promptTemplate,
 			JSON.stringify(heuristics),
-			JSON.stringify(previewUrls ?? []),
+			JSON.stringify(persistedUrls),
 			notes,
 		],
 	);
