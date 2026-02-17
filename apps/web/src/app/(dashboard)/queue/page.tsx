@@ -8,7 +8,13 @@ export default async function QueuePage() {
 	if (session.error === "RefreshTokenError") redirect("/login");
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col gap-[var(--space-md)]">
+		<div
+			className="flex flex-col gap-[var(--space-md)] overflow-hidden"
+			style={{
+				height:
+					"calc(100dvh - var(--nav-height) - var(--space-md) * 2 - var(--space-xl) * 2)",
+			}}
+		>
 			<h1 className="text-lg font-semibold shrink-0">Queue</h1>
 			<QueueBoard />
 		</div>

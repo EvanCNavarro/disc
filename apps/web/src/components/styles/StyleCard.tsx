@@ -1,6 +1,5 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PaintBrush01Icon } from "@hugeicons-pro/core-stroke-rounded";
-import Image from "next/image";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -23,16 +22,16 @@ export function StyleCard({ style }: StyleCardProps) {
 		>
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
 				{style.thumbnail_url ? (
-					<Image
+					// biome-ignore lint/performance/noImgElement: R2-proxied via /api/images with query string — next/image can't handle localPatterns with query strings
+					<img
 						src={
 							style.thumbnail_url.startsWith("styles/")
 								? `/api/images?key=${encodeURIComponent(style.thumbnail_url)}`
 								: style.thumbnail_url
 						}
 						alt={`${style.name} thumbnail`}
-						fill
-						className="object-cover"
-						sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+						className="absolute inset-0 h-full w-full object-cover"
+						loading="lazy"
 					/>
 				) : (
 					<div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
