@@ -1,3 +1,9 @@
+/** Parse a D1 datetime string as UTC (SQLite omits the Z suffix) */
+function parseUTC(dateStr: string): Date {
+	const s = dateStr.endsWith("Z") ? dateStr : `${dateStr.replace(" ", "T")}Z`;
+	return new Date(s);
+}
+
 export function formatDuration(ms: number | null): string {
 	if (ms == null) return "\u2014";
 	if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -29,11 +35,11 @@ const timestampFormatter = new Intl.DateTimeFormat("en-GB", {
 });
 
 export function formatTimestamp(dateStr: string): string {
-	return timestampFormatter.format(new Date(dateStr));
+	return timestampFormatter.format(parseUTC(dateStr));
 }
 
 export function formatElapsed(startedAt: string): string {
-	const ms = Date.now() - new Date(startedAt).getTime();
+	const ms = Math.max(0, Date.now() - parseUTC(startedAt).getTime());
 	const mins = Math.floor(ms / 60_000);
 	const secs = Math.floor((ms % 60_000) / 1_000);
 	if (mins > 0) return `${mins}m ${secs}s`;
@@ -41,7 +47,7 @@ export function formatElapsed(startedAt: string): string {
 }
 
 export function formatRelative(dateStr: string): string {
-	const date = new Date(dateStr);
+	const date = parseUTC(dateStr);
 	const now = new Date();
 	const diffMs = now.getTime() - date.getTime();
 	const diffMins = Math.floor(diffMs / 60_000);

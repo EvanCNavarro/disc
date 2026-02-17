@@ -143,7 +143,7 @@ export function GenerationHistoryTable() {
 					value={statusFilter}
 					onChange={handleStatusFilter}
 				/>
-				<div className="mx-1 w-px bg-[var(--color-border-subtle)]" />
+				<div className="mx-1 hidden sm:block w-px self-stretch bg-[var(--color-border-subtle)]" />
 				<FilterGroup
 					label="Trigger"
 					options={TRIGGER_OPTIONS}
@@ -252,7 +252,7 @@ function FilterGroup<T extends string>({
 	onChange: (v: T) => void;
 }) {
 	return (
-		<div className="flex items-center gap-[var(--space-xs)]">
+		<div className="flex flex-wrap items-center gap-[var(--space-xs)]">
 			<span className="text-xs text-[var(--color-text-faint)] uppercase tracking-wide">
 				{label}:
 			</span>
@@ -610,9 +610,9 @@ function MobileRow({
 						</span>
 					</div>
 				</div>
-				<div className="flex items-center gap-3 shrink-0 ml-3">
+				<div className="flex items-center gap-2 shrink-0 ml-2">
 					<StatusBadge status={row.status} />
-					<span className="text-xs text-[var(--color-text-faint)]">
+					<span className="hidden xs:inline text-xs text-[var(--color-text-faint)]">
 						{formatTimestamp(row.created_at)}
 					</span>
 				</div>

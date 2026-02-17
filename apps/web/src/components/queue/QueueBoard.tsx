@@ -595,7 +595,7 @@ export function QueueBoard() {
 				{[1, 2, 3, 4].map((i) => (
 					<div
 						key={i}
-						className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink"
+						className="min-w-[calc(100vw-4rem)] shrink-0 snap-center md:min-w-0 md:shrink"
 					>
 						<div className="flex flex-col gap-[var(--space-sm)]">
 							<div className="h-6 w-24 animate-pulse rounded-[var(--radius-md)] bg-[var(--color-surface)]" />
@@ -708,7 +708,7 @@ export function QueueBoard() {
 					{/* Kanban grid */}
 					<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none">
 						{/* To Do column */}
-						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+						<div className="min-w-[calc(100vw-4rem)] shrink-0 snap-center md:min-w-0 md:shrink">
 							<QueueColumn
 								title="To Do"
 								count={todo.length}
@@ -758,7 +758,7 @@ export function QueueBoard() {
 						</div>
 
 						{/* Scheduled column */}
-						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+						<div className="min-w-[calc(100vw-4rem)] shrink-0 snap-center md:min-w-0 md:shrink">
 							<QueueColumn
 								title="Scheduled"
 								count={scheduled.length}
@@ -801,7 +801,7 @@ export function QueueBoard() {
 						</div>
 
 						{/* In Progress column */}
-						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+						<div className="min-w-[calc(100vw-4rem)] shrink-0 snap-center md:min-w-0 md:shrink">
 							<QueueColumn
 								title="In Progress"
 								count={inProgress.length}
@@ -834,7 +834,7 @@ export function QueueBoard() {
 						</div>
 
 						{/* Done column */}
-						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+						<div className="min-w-[calc(100vw-4rem)] shrink-0 snap-center md:min-w-0 md:shrink">
 							<QueueColumn
 								title="Done"
 								count={done.length}

@@ -99,10 +99,10 @@ export async function GET() {
 		name: "Unknown",
 	};
 
-	// 1. Check for active job (auto-expire stale jobs older than 2 hours)
+	// 1. Check for active job (auto-expire stale jobs older than 30 minutes)
 	await queryD1(
 		`UPDATE jobs SET status = 'failed', completed_at = datetime('now')
-		 WHERE user_id = ? AND status = 'processing' AND started_at < datetime('now', '-2 hours')`,
+		 WHERE user_id = ? AND status = 'processing' AND started_at < datetime('now', '-30 minutes')`,
 		[user.id],
 	);
 
@@ -172,17 +172,28 @@ export async function GET() {
 			};
 		});
 
-		activeJob = {
-			id: job.id,
-			type: job.type as "cron" | "manual" | "auto",
-			startedAt: job.started_at,
-			style: userStyle,
-			playlists: playlistStatuses,
-			totalCost,
-			completedCount,
-			failedCount,
-			pendingCount,
-		};
+		// Auto-complete job if all playlists are done (no pending/processing)
+		const inFlightCount =
+			pendingCount + playlists.filter((p) => p.status === "processing").length;
+		if (playlists.length > 0 && inFlightCount === 0) {
+			await queryD1(
+				`UPDATE jobs SET status = 'completed', completed_playlists = ?, failed_playlists = ?, total_cost_usd = ?, completed_at = datetime('now') WHERE id = ?`,
+				[completedCount, failedCount, totalCost, job.id],
+			);
+			// Don't return activeJob — fall through to lastCompletedJob
+		} else {
+			activeJob = {
+				id: job.id,
+				type: job.type as "cron" | "manual" | "auto",
+				startedAt: job.started_at,
+				style: userStyle,
+				playlists: playlistStatuses,
+				totalCost,
+				completedCount,
+				failedCount,
+				pendingCount,
+			};
+		}
 	}
 
 	// 2. Last completed job (within the last hour, only when nothing is active)
@@ -201,8 +212,10 @@ export async function GET() {
 
 		if (completedJobs.length > 0) {
 			const cj = completedJobs[0];
-			const startMs = new Date(cj.started_at).getTime();
-			const endMs = new Date(cj.completed_at).getTime();
+			const parseUTC = (s: string) =>
+				new Date(s.endsWith("Z") ? s : `${s.replace(" ", "T")}Z`);
+			const startMs = parseUTC(cj.started_at).getTime();
+			const endMs = parseUTC(cj.completed_at).getTime();
 
 			lastCompletedJob = {
 				id: cj.id,
