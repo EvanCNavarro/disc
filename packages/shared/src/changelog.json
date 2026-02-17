@@ -1,6 +1,22 @@
 {
 	"versions": [
 		{
+			"version": "0.8.9",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Auto-refresh when new version deployed — users always see latest code"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Global error boundary with ChunkLoadError auto-recovery after deploys"
+				}
+			]
+		},
+		{
 			"version": "0.8.8",
 			"date": "2026-02-16",
 			"entries": [
