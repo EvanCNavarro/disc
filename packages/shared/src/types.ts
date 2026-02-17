@@ -106,6 +106,8 @@ export interface DbUser {
 	updated_at: string;
 	last_login_at: string;
 	deleted_at: string | null;
+	watcher_enabled: number;
+	watcher_interval_minutes: number;
 }
 
 // ──────────────────────────────────────────────
