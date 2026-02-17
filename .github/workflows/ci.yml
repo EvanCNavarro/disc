@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      HUGEICONS_NPM_TOKEN: ${{ secrets.HUGEICONS_NPM_TOKEN }}
 
     steps:
       - name: Checkout
@@ -42,3 +44,68 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           workingDirectory: workers/cron
+
+  verify-deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: ci
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get expected version
+        id: version
+        run: |
+          VERSION=$(grep -oP 'APP_VERSION = "\K[^"]+' packages/shared/src/version.ts)
+          echo "expected=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Expected version: $VERSION"
+
+      - name: Wait for Vercel deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_API_TOKEN }}
+          VERCEL_PROJECT_ID: prj_0LKhEdVEXGr9vWhO17i3vKgM9EV7
+          VERCEL_TEAM_ID: team_xvDxeZVOzvjzLRJSSzrSSHG1
+        run: |
+          echo "Waiting for Vercel to deploy commit $GITHUB_SHA..."
+          for i in $(seq 1 30); do
+            RESPONSE=$(curl -sf \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_TEAM_ID&limit=5")
+            STATE=$(echo "$RESPONSE" | node -e "
+              const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+              const dep=d.deployments.find(x=>x.meta?.githubCommitSha==='$GITHUB_SHA');
+              console.log(dep ? dep.state : 'NOT_FOUND');
+            ")
+            echo "Attempt $i/30: state=$STATE"
+            if [ "$STATE" = "READY" ]; then
+              echo "Vercel deployment is READY"
+              break
+            elif [ "$STATE" = "ERROR" ]; then
+              echo "::error::Vercel deployment FAILED"
+              exit 1
+            fi
+            sleep 20
+          done
+          if [ "$STATE" != "READY" ]; then
+            echo "::error::Vercel deployment did not become ready within 10 minutes"
+            exit 1
+          fi
+
+      - name: Verify live version
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.expected }}
+        run: |
+          echo "Checking https://disc.400.dev/api/version..."
+          RESPONSE=$(curl -sf https://disc.400.dev/api/version)
+          LIVE_VERSION=$(echo "$RESPONSE" | node -e "
+            const d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
+            console.log(d.version);
+          ")
+          echo "Live version: $LIVE_VERSION"
+          echo "Expected version: $EXPECTED_VERSION"
+          if [ "$LIVE_VERSION" != "$EXPECTED_VERSION" ]; then
+            echo "::error::Version mismatch! Live=$LIVE_VERSION Expected=$EXPECTED_VERSION"
+            exit 1
+          fi
+          echo "Version verified: $LIVE_VERSION"

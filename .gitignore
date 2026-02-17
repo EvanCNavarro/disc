@@ -36,8 +36,7 @@ coverage/
 .env*.local
 .vercel
 
-# Auth tokens
-.npmrc
+# Auth tokens (actual secrets go in env vars, not .npmrc)
 
 # Test images & generated artifacts
 img/

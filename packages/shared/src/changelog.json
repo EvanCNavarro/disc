@@ -1,6 +1,27 @@
 {
 	"versions": [
 		{
+			"version": "0.8.2",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "deploy",
+					"message": "Fix Vercel and CI builds failing due to missing HugeIcons npm auth token"
+				},
+				{
+					"type": "feat",
+					"scope": "ci",
+					"message": "Add deployment verification — CI now confirms live site version after each deploy"
+				},
+				{
+					"type": "feat",
+					"scope": "api",
+					"message": "Add /api/version endpoint for programmatic version checks"
+				}
+			]
+		},
+		{
 			"version": "0.8.1",
 			"date": "2026-02-16",
 			"entries": [
