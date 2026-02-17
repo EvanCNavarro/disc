@@ -282,6 +282,44 @@ export interface DbJob {
 	created_at: string;
 }
 
+// ──────────────────────────────────────────────
+// Queue status types (cron visibility)
+// ──────────────────────────────────────────────
+
+export interface QueuePlaylistStatus {
+	id: string;
+	name: string;
+	spotifyPlaylistId: string;
+	status: "pending" | "processing" | "completed" | "failed";
+	thumbnailR2Key: string | null;
+	currentStep: string | null;
+	stepSummary: string | null;
+	durationMs: number | null;
+	costUsd: number | null;
+}
+
+export interface QueueActiveJob {
+	id: string;
+	type: "cron" | "manual";
+	startedAt: string;
+	style: { id: string; name: string };
+	playlists: QueuePlaylistStatus[];
+	totalCost: number;
+	completedCount: number;
+	failedCount: number;
+	pendingCount: number;
+}
+
+export interface QueueNextCron {
+	utcTime: string;
+	style: { id: string; name: string };
+}
+
+export interface QueueStatus {
+	activeJob: QueueActiveJob | null;
+	nextCron: QueueNextCron | null;
+}
+
 export interface DbPlaylistAnalysis {
 	id: string;
 	user_id: string;
