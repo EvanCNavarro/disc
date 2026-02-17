@@ -30,6 +30,8 @@ interface UserRow {
 	style_preference: string | null;
 	cron_time: string;
 	spotify_user_id: string;
+	watcher_enabled: number;
+	watcher_interval_minutes: number;
 }
 
 interface WatchedPlaylistRow {
@@ -235,7 +237,8 @@ async function runScheduledCron(env: Env): Promise<void> {
 	);
 
 	const usersResult = await env.DB.prepare(
-		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id
+		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id,
+		        watcher_enabled, watcher_interval_minutes
 		 FROM users
 		 WHERE cron_enabled = 1
 		   AND cron_time >= ? AND cron_time <= ?`,
@@ -414,7 +417,8 @@ async function setupTrigger(
 	options: TriggerOptions,
 ): Promise<TriggerSetup> {
 	const user = await env.DB.prepare(
-		`SELECT id, encrypted_refresh_token, style_preference, cron_time
+		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id,
+		        watcher_enabled, watcher_interval_minutes
 		 FROM users
 		 WHERE encrypted_refresh_token IS NOT NULL
 		 LIMIT 1`,
@@ -552,10 +556,12 @@ async function executeTrigger(
  * 4. When stable (2 ticks, ~10 min) + has tracks → trigger APLOTOCA
  */
 async function watchForNewPlaylists(env: Env): Promise<void> {
-	console.log("[Watcher] Tick");
+	const utcMinute = new Date().getUTCMinutes();
+	console.log(`[Watcher] Tick (UTC minute ${utcMinute})`);
 
 	const usersResult = await env.DB.prepare(
-		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id
+		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id,
+		        watcher_enabled, watcher_interval_minutes
 		 FROM users
 		 WHERE cron_enabled = 1
 		   AND encrypted_refresh_token IS NOT NULL`,
@@ -568,6 +574,18 @@ async function watchForNewPlaylists(env: Env): Promise<void> {
 	}
 
 	for (const user of users) {
+		// Skip users with watcher disabled
+		if (!user.watcher_enabled) {
+			continue;
+		}
+
+		// Respect per-user interval: only run on minutes aligned to their interval
+		const interval = [5, 10, 15].includes(user.watcher_interval_minutes)
+			? user.watcher_interval_minutes
+			: 5;
+		if (utcMinute % interval !== 0) {
+			continue;
+		}
 		try {
 			await watchUser(user, env);
 		} catch (error) {

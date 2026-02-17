@@ -102,8 +102,6 @@ export interface DbUser {
 	style_preference: string;
 	cron_enabled: boolean;
 	cron_time: string;
-	watcher_enabled: number;
-	watcher_interval_minutes: number;
 	created_at: string;
 	updated_at: string;
 	last_login_at: string;

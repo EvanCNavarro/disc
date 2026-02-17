@@ -5,6 +5,7 @@ import type {
 	GenerationVersion,
 	PipelineProgress,
 	QueueCompletedJob,
+	WatcherSettings,
 } from "@disc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueue } from "@/context/QueueContext";
@@ -171,11 +172,15 @@ export function QueueBoard() {
 	const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-	const { status: queueStatus } = useQueue();
+	const { status: queueStatus, refresh: refreshQueue } = useQueue();
 	const hasCronActive = Boolean(queueStatus?.activeJob);
 	const lastCompleted = queueStatus?.lastCompletedJob ?? null;
 	const showCompletionBanner =
 		lastCompleted && lastCompleted.id !== dismissedJobId;
+	const watcherSettings: WatcherSettings = queueStatus?.watcherSettings ?? {
+		enabled: true,
+		intervalMinutes: 5,
+	};
 
 	// Fetch playlists, styles, and session
 	const fetchData = useCallback(async () => {
@@ -454,6 +459,39 @@ export function QueueBoard() {
 		});
 	}, [done]);
 
+	// Watcher settings handlers
+	const handleWatcherToggle = useCallback(
+		async (enabled: boolean) => {
+			try {
+				await fetch("/api/settings/watcher", {
+					method: "PATCH",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ enabled }),
+				});
+				await refreshQueue();
+			} catch {
+				// Will sync on next poll
+			}
+		},
+		[refreshQueue],
+	);
+
+	const handleWatcherIntervalChange = useCallback(
+		async (minutes: number) => {
+			try {
+				await fetch("/api/settings/watcher", {
+					method: "PATCH",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ intervalMinutes: minutes }),
+				});
+				await refreshQueue();
+			} catch {
+				// Will sync on next poll
+			}
+		},
+		[refreshQueue],
+	);
+
 	// Retry handler (individual card in Done column)
 	const handleRetry = useCallback(
 		async (playlistId: string) => {
@@ -579,7 +617,11 @@ export function QueueBoard() {
 					)}
 
 					{/* Watcher countdown */}
-					<WatcherBanner />
+					<WatcherBanner
+						settings={watcherSettings}
+						onToggle={handleWatcherToggle}
+						onIntervalChange={handleWatcherIntervalChange}
+					/>
 
 					{/* Sticky action header — style picker + playlist count */}
 					<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
