@@ -48,7 +48,13 @@ function QueueNavItemWithTooltip({ active }: { active: boolean }) {
 	const { status } = useQueue();
 	const [showTooltip, setShowTooltip] = useState(false);
 	const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const isActive = Boolean(status?.activeJob);
+	const activeJob = status?.activeJob ?? null;
+	const isActive = Boolean(activeJob);
+	const remaining = activeJob
+		? activeJob.playlists.length -
+			activeJob.completedCount -
+			activeJob.failedCount
+		: 0;
 
 	const handleMouseEnter = useCallback(() => {
 		if (hideTimeoutRef.current) {
@@ -80,20 +86,21 @@ function QueueNavItemWithTooltip({ active }: { active: boolean }) {
 						: "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)]"
 				}`}
 			>
-				<span className="relative">
+				{isActive ? (
+					<span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-[1.5px] border-[var(--color-info)] border-t-transparent" />
+				) : (
 					<HugeiconsIcon
 						icon={DashboardSquare02Icon}
 						size={14}
 						strokeWidth={1.5}
 					/>
-					{isActive && (
-						<span className="absolute -top-0.5 -right-0.5 flex h-2 w-2">
-							<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--color-accent)] opacity-75" />
-							<span className="relative inline-flex h-2 w-2 rounded-full bg-[var(--color-accent)]" />
-						</span>
-					)}
-				</span>
+				)}
 				<span className="hidden sm:inline">Queue</span>
+				{isActive && remaining > 0 && (
+					<span className="flex h-4 min-w-4 items-center justify-center rounded-[var(--radius-pill)] bg-[var(--color-info-muted)] px-1 text-[10px] font-semibold text-[var(--color-info)]">
+						{remaining}
+					</span>
+				)}
 			</Link>
 
 			{showTooltip && status && (
