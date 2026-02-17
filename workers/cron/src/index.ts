@@ -112,6 +112,7 @@ export default {
 					style_id?: string;
 					revision_notes?: string;
 					custom_object?: string;
+					light_extraction_text?: string;
 					trigger_type?: string;
 				};
 
@@ -123,6 +124,7 @@ export default {
 					styleId: body.style_id ?? null,
 					revisionNotes: body.revision_notes ?? null,
 					customObject: body.custom_object ?? null,
+					lightExtractionText: body.light_extraction_text ?? null,
 					triggerType: (body.trigger_type as "manual" | "cron") ?? "manual",
 				};
 
@@ -318,6 +320,7 @@ interface TriggerOptions {
 	styleId: string | null;
 	revisionNotes: string | null;
 	customObject: string | null;
+	lightExtractionText: string | null;
 	triggerType: "manual" | "cron";
 }
 
@@ -449,6 +452,7 @@ async function executeTrigger(
 				triggerType: options.triggerType,
 				revisionNotes: options.revisionNotes ?? undefined,
 				customObject: options.customObject ?? undefined,
+				lightExtractionText: options.lightExtractionText ?? undefined,
 			},
 		);
 	}

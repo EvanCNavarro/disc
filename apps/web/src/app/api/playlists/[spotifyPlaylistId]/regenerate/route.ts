@@ -21,6 +21,7 @@ export async function POST(
 		notes?: string;
 		styleId?: string;
 		customObject?: string;
+		lightExtractionText?: string;
 	};
 
 	const mode = body.mode ?? "rerun";
@@ -84,6 +85,7 @@ export async function POST(
 				style_id: body.styleId,
 				revision_notes: mode === "revision" ? body.notes : undefined,
 				custom_object: body.customObject || undefined,
+				light_extraction_text: body.lightExtractionText || undefined,
 				trigger_type: "manual",
 			}),
 			signal: AbortSignal.timeout(15_000),

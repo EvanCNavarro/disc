@@ -20,7 +20,12 @@ import type {
 	PipelineStepName,
 	StepData,
 } from "@disc/shared";
-import { convergeAndSelect, detectChanges, extractThemes } from "./extraction";
+import {
+	convergeAndSelect,
+	detectChanges,
+	extractThemes,
+	lightExtract,
+} from "./extraction";
 import { compressForSpotify } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
 import { calculateImageCost, calculateLLMCost, LLM_MODEL } from "./pricing";
@@ -78,6 +83,7 @@ export interface PipelineOptions {
 	triggerType?: "manual" | "cron";
 	revisionNotes?: string;
 	customObject?: string;
+	lightExtractionText?: string;
 }
 
 /**
@@ -216,6 +222,69 @@ export async function generateForPlaylist(
 				? `Revision guidance: ${options.revisionNotes}. `
 				: "";
 			subject = `${revisionPrefix}${options.customObject}`;
+		} else if (options.lightExtractionText) {
+			// Light extraction: one LLM call to derive object + mood from user text
+			console.log(
+				`[Pipeline] Light extraction from: "${options.lightExtractionText}"`,
+			);
+
+			// Load exclusions (same as full pipeline)
+			const claimedResult = await env.DB.prepare(
+				`SELECT id, user_id, playlist_id, object_name, aesthetic_context, source_generation_id, superseded_at, created_at
+				 FROM claimed_objects
+				 WHERE user_id = ? AND playlist_id != ? AND superseded_at IS NULL`,
+			)
+				.bind(playlist.user_id, playlist.id)
+				.all<DbClaimedObject>();
+
+			const extracted = await lightExtract(
+				options.lightExtractionText,
+				playlist.name,
+				claimedResult.results,
+				env.OPENAI_API_KEY,
+			);
+
+			chosenObject = extracted.object;
+			chosenAestheticContext = extracted.aestheticContext;
+			convTokensIn = extracted.inputTokens;
+			convTokensOut = extracted.outputTokens;
+
+			// Fast-forward progress through skipped steps
+			await tracker.advance("fetch_lyrics");
+			await tracker.advance("fetch_lyrics", {
+				found: 0,
+				total: tracks.length,
+				tracks: [],
+			});
+			await tracker.advance("extract_themes");
+			await tracker.advance("extract_themes", {
+				completed: 0,
+				total: 0,
+				objectCount: 0,
+				topObjects: [],
+				tokensUsed: 0,
+				perTrack: [],
+			});
+			await tracker.advance("select_theme");
+			await tracker.advance("select_theme", {
+				chosenObject: extracted.object,
+				aestheticContext: extracted.aestheticContext,
+				collisionNotes: `Light extraction from user text: "${options.lightExtractionText}"`,
+				candidates: [
+					{
+						object: extracted.object,
+						aestheticContext: extracted.aestheticContext,
+						reasoning: extracted.reasoning,
+						rank: 1,
+					},
+				],
+			});
+			await tracker.advance("generate_image");
+
+			const revisionPrefix = options.revisionNotes
+				? `Revision guidance: ${options.revisionNotes}. `
+				: "";
+			subject = `${revisionPrefix}${extracted.object}, ${extracted.aestheticContext}`;
 		} else {
 			checkTimeout();
 			// ── Step 4: Fetch lyrics (parallel, non-blocking failures) ──
