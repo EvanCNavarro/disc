@@ -34,9 +34,9 @@ export function QueueColumn({
 	return (
 		<section
 			aria-labelledby={headingId}
-			className="flex flex-col gap-[var(--space-sm)] min-w-0 min-h-0 h-full"
+			className="flex flex-col gap-[var(--space-sm)] min-w-0"
 		>
-			<div className="flex items-center gap-[var(--space-sm)] px-1 shrink-0">
+			<div className="flex items-center gap-[var(--space-sm)] px-1">
 				<h3
 					id={headingId}
 					className="text-base font-semibold text-[var(--color-text-secondary)]"
@@ -50,7 +50,7 @@ export function QueueColumn({
 				</span>
 			</div>
 			<div
-				className={`flex flex-col gap-[var(--space-sm)] rounded-[var(--radius-lg)] p-[var(--space-sm)] flex-1 overflow-y-auto min-h-0 ${variantColors[variant]}`}
+				className={`flex flex-col gap-[var(--space-sm)] rounded-[var(--radius-lg)] p-[var(--space-sm)] ${variantColors[variant]}`}
 			>
 				{children}
 			</div>

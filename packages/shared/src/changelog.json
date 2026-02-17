@@ -1,6 +1,27 @@
 {
 	"versions": [
 		{
+			"version": "0.8.10",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "queue",
+					"message": "Queue page now flows naturally with footer at bottom instead of fixed viewport height"
+				},
+				{
+					"type": "fix",
+					"scope": "queue",
+					"message": "Queue action bar sticks below navbar when scrolling down the page"
+				},
+				{
+					"type": "fix",
+					"scope": "queue",
+					"message": "Optimistic UI on Generate — items move to Scheduled instantly instead of waiting 15s for worker response"
+				}
+			]
+		},
+		{
 			"version": "0.8.9",
 			"date": "2026-02-16",
 			"entries": [

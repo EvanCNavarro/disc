@@ -178,18 +178,31 @@ export function QueueBoard() {
 		setSelectedIds(new Set());
 	}, []);
 
-	// Batch trigger
+	// Batch trigger — optimistic UI: move items to Scheduled immediately
 	const handleBatchTrigger = useCallback(async () => {
 		if (selectedIds.size === 0) return;
 
+		const idsToTrigger = Array.from(selectedIds);
+
+		// Optimistic: immediately move selected playlists to "queued" status
+		setPlaylists((prev) =>
+			prev.map((p) =>
+				idsToTrigger.includes(p.id) ? { ...p, status: "queued" } : p,
+			),
+		);
+		setSelectedIds(new Set());
 		setTriggering(true);
 		setError(null);
+
+		// Scroll to top so user sees scheduled column
+		window.scrollTo({ top: 0, behavior: "smooth" });
+
 		try {
 			const response = await fetch("/api/playlists/generate-batch", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					playlistIds: Array.from(selectedIds),
+					playlistIds: idsToTrigger,
 					styleId: styleOverride || undefined,
 				}),
 			});
@@ -202,14 +215,17 @@ export function QueueBoard() {
 				if (data.failed > 0) {
 					setError(`${data.succeeded} triggered, ${data.failed} failed`);
 				}
-				setSelectedIds(new Set());
 				await fetchData();
 			} else {
 				const data = (await response.json()) as { error?: string };
 				setError(data.error ?? "Batch trigger failed");
+				// Revert optimistic update on failure
+				await fetchData();
 			}
 		} catch {
 			setError("Network error — could not reach server");
+			// Revert optimistic update on failure
+			await fetchData();
 		} finally {
 			setTriggering(false);
 		}
@@ -287,17 +303,17 @@ export function QueueBoard() {
 		return (
 			<output
 				aria-label="Loading queue"
-				className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none flex-1 min-h-0"
+				className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none"
 			>
 				<span className="sr-only">Loading queue data…</span>
 				{[1, 2, 3, 4].map((i) => (
 					<div
 						key={i}
-						className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink"
+						className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink"
 					>
-						<div className="flex flex-col gap-[var(--space-sm)] h-full">
+						<div className="flex flex-col gap-[var(--space-sm)]">
 							<div className="h-6 w-24 animate-pulse rounded-[var(--radius-md)] bg-[var(--color-surface)]" />
-							<div className="flex-1 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-surface)]" />
+							<div className="h-48 animate-pulse rounded-[var(--radius-lg)] bg-[var(--color-surface)]" />
 						</div>
 					</div>
 				))}
@@ -310,10 +326,10 @@ export function QueueBoard() {
 	return (
 		<section
 			aria-label="Generation queue"
-			className="flex flex-col flex-1 min-h-0 gap-[var(--space-md)]"
+			className="flex flex-col gap-[var(--space-md)]"
 		>
-			{/* Sticky action header */}
-			<div className="sticky top-0 z-30 shrink-0 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
+			{/* Sticky action header — sticks below navbar when scrolling */}
+			<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
 				{/* Selection count */}
 				<span className="text-sm font-medium text-[var(--color-text-secondary)]">
 					{hasSelection
@@ -381,8 +397,8 @@ export function QueueBoard() {
 			)}
 
 			{/* Kanban grid */}
-			<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none flex-1 min-h-0">
-				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
+			<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none">
+				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn title="To Do" count={todo.length} variant="todo">
 						{todo.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
@@ -406,7 +422,7 @@ export function QueueBoard() {
 					</QueueColumn>
 				</div>
 
-				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
+				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn
 						title="Scheduled"
 						count={scheduled.length}
@@ -432,7 +448,7 @@ export function QueueBoard() {
 					</QueueColumn>
 				</div>
 
-				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
+				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn
 						title="In Progress"
 						count={inProgress.length}
@@ -463,7 +479,7 @@ export function QueueBoard() {
 					</QueueColumn>
 				</div>
 
-				<div className="min-w-[80vw] shrink-0 snap-center h-full md:min-w-0 md:shrink">
+				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn title="Done" count={done.length} variant="done">
 						{done.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
