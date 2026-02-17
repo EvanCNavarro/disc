@@ -59,6 +59,7 @@ export function PreviewGrid({
 			{/* Action buttons */}
 			<div className="mt-[var(--space-md)] flex gap-[var(--space-sm)]">
 				<button
+					type="button"
 					onClick={onRegenerate}
 					disabled={regenerating}
 					className="flex-1 rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
@@ -66,6 +67,7 @@ export function PreviewGrid({
 					{regenerating ? "Generating..." : "Regenerate"}
 				</button>
 				<button
+					type="button"
 					onClick={onNewSubjects}
 					disabled={regenerating}
 					className="rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] disabled:opacity-50"

@@ -45,6 +45,7 @@ export function VersionHistory({
 
 					{versions.map((v) => (
 						<button
+							type="button"
 							key={v.id}
 							onClick={() => onLoadVersion(v.id)}
 							disabled={v.isCurrent}

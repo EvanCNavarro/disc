@@ -225,6 +225,7 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 						{/* Action buttons */}
 						<div className="flex gap-[var(--space-sm)]">
 							<button
+								type="button"
 								onClick={handleSaveVersion}
 								disabled={status !== "idle"}
 								className="flex-1 rounded-[var(--radius-pill)] border border-[var(--color-border)] px-3 py-2 text-xs font-medium text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface)] disabled:opacity-50"
@@ -234,6 +235,7 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 									: `Save v${(versionCounter + 0.1).toFixed(1)}`}
 							</button>
 							<button
+								type="button"
 								onClick={handlePublish}
 								disabled={status !== "idle"}
 								className="flex-1 rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
@@ -244,6 +246,7 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 
 						{/* Delete */}
 						<button
+							type="button"
 							onClick={() => setDeleteDialogOpen(true)}
 							disabled={status !== "idle"}
 							className="rounded-[var(--radius-pill)] border border-red-300 px-3 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"

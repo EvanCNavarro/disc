@@ -1,6 +1,22 @@
 {
 	"versions": [
 		{
+			"version": "0.8.1",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "a11y",
+					"message": "Add explicit type=\"button\" to all non-submit buttons"
+				},
+				{
+					"type": "chore",
+					"scope": "cleanup",
+					"message": "Remove dead prompt-builder module, stale style definitions, and outdated planning docs"
+				}
+			]
+		},
+		{
 			"version": "0.8.0",
 			"date": "2026-02-16",
 			"entries": [
