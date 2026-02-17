@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.11.2",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "tracks",
+					"message": "Fix missing album art on tracks with Spotify name suffixes via fuzzy snapshot matching + music note placeholder"
+				}
+			]
+		},
+		{
 			"version": "0.11.1",
 			"date": "2026-02-17",
 			"entries": [
