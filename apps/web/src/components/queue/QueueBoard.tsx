@@ -6,6 +6,9 @@ import type {
 	PipelineProgress,
 } from "@disc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueue } from "@/context/QueueContext";
+import { CronIdleBanner } from "./CronIdleBanner";
+import { CronProgressPanel } from "./CronProgressPanel";
 import { ImageReviewModal } from "./ImageReviewModal";
 import { QueueCard, type ScheduleConfig } from "./QueueCard";
 import { QueueColumn } from "./QueueColumn";
@@ -60,6 +63,9 @@ export function QueueBoard() {
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+	const { status: queueStatus } = useQueue();
+	const hasCronActive = queueStatus?.activeJob !== null;
 
 	// Fetch playlists, styles, and session
 	const fetchData = useCallback(async () => {
@@ -432,222 +438,245 @@ export function QueueBoard() {
 			aria-label="Generation queue"
 			className="flex flex-col gap-[var(--space-md)]"
 		>
-			{/* Sticky action header — style picker + playlist count */}
-			<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
-				<span className="text-sm font-medium text-[var(--color-text-secondary)]">
-					{playlists.length} playlists
-				</span>
-				<div className="flex-1" />
-				<StylePicker
-					styles={styles}
-					value={styleOverride}
-					onChange={setStyleOverride}
+			{/* Cron active: full replacement */}
+			{hasCronActive && queueStatus?.activeJob ? (
+				<CronProgressPanel
+					job={queueStatus.activeJob}
+					onViewPlaylist={setModalPlaylistId}
 				/>
-			</div>
+			) : (
+				<>
+					{/* Cron idle banner */}
+					{queueStatus?.nextCron && (
+						<CronIdleBanner nextCron={queueStatus.nextCron} />
+					)}
 
-			{/* Error banner */}
-			{error && (
-				<div
-					role="alert"
-					className="shrink-0 flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-[var(--space-md)] py-[var(--space-sm)] text-sm text-[var(--color-destructive)]"
-				>
-					<span>{error}</span>
-					<button
-						type="button"
-						onClick={() => setError(null)}
-						className="ml-[var(--space-sm)] text-xs opacity-70 hover:opacity-100"
-					>
-						Dismiss
-					</button>
-				</div>
-			)}
+					{/* Sticky action header — style picker + playlist count */}
+					<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
+						<span className="text-sm font-medium text-[var(--color-text-secondary)]">
+							{playlists.length} playlists
+						</span>
+						<div className="flex-1" />
+						<StylePicker
+							styles={styles}
+							value={styleOverride}
+							onChange={setStyleOverride}
+						/>
+					</div>
 
-			{/* Kanban grid */}
-			<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none">
-				{/* To Do column */}
-				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn
-						title="To Do"
-						count={todo.length}
-						variant="todo"
-						actions={
-							<>
-								<button
-									type="button"
-									onClick={hasSelection ? clearSelection : selectAll}
-									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
-								>
-									{hasSelection ? "Deselect" : "Select All"}
-								</button>
-								<button
-									type="button"
-									onClick={handleSchedule}
-									disabled={selectedIds.size === 0}
-									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
-								>
-									Schedule
-								</button>
-							</>
-						}
-					>
-						{todo.length === 0 ? (
-							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-								No playlists pending
-							</p>
-						) : (
-							todo.map((p) => (
-								<QueueCard
-									key={p.id}
-									id={p.id}
-									name={p.name}
-									status={p.status}
-									coverUrl={p.spotify_cover_url}
-									progressData={p.progress_data}
-									lastGeneratedAt={p.last_generated_at}
-									locked={!isEligible(p)}
-									selected={selectedIds.has(p.id)}
-									onSelect={isEligible(p) ? toggleSelect : undefined}
-								/>
-							))
-						)}
-					</QueueColumn>
-				</div>
-
-				{/* Scheduled column */}
-				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn
-						title="Scheduled"
-						count={scheduled.length}
-						variant="scheduled"
-						actions={
+					{/* Error banner */}
+					{error && (
+						<div
+							role="alert"
+							className="shrink-0 flex items-center justify-between rounded-[var(--radius-md)] border border-[var(--color-destructive)]/30 bg-[var(--color-destructive)]/10 px-[var(--space-md)] py-[var(--space-sm)] text-sm text-[var(--color-destructive)]"
+						>
+							<span>{error}</span>
 							<button
 								type="button"
-								onClick={handleRun}
-								disabled={!canRun}
-								className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
+								onClick={() => setError(null)}
+								className="ml-[var(--space-sm)] text-xs opacity-70 hover:opacity-100"
 							>
-								Run
-								{scheduledItems.size > 0 ? ` (${scheduledItems.size})` : ""}
+								Dismiss
 							</button>
-						}
-					>
-						{scheduled.length === 0 ? (
-							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-								Nothing scheduled
-							</p>
-						) : (
-							scheduled.map((p) => (
-								<QueueCard
-									key={p.id}
-									id={p.id}
-									name={p.name}
-									status={p.status}
-									coverUrl={p.spotify_cover_url}
-									progressData={p.progress_data}
-									lastGeneratedAt={p.last_generated_at}
-									scheduleConfig={scheduledItems.get(p.id)}
-									onConfigChange={(config) => handleConfigChange(p.id, config)}
-									onUnschedule={() => handleUnschedule(p.id)}
-								/>
-							))
-						)}
-					</QueueColumn>
-				</div>
+						</div>
+					)}
 
-				{/* In Progress column */}
-				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn
-						title="In Progress"
-						count={inProgress.length}
-						variant="progress"
-					>
-						{inProgress.length === 0 ? (
-							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-								Nothing processing
-							</p>
-						) : (
-							inProgress.map((p) => (
-								<QueueCard
-									key={p.id}
-									id={p.id}
-									name={p.name}
-									status={p.status}
-									coverUrl={
-										p.latest_r2_key
-											? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
-											: p.spotify_cover_url
-									}
-									progressData={p.progress_data}
-									lastGeneratedAt={p.last_generated_at}
-									onViewDetails={setModalPlaylistId}
-								/>
-							))
-						)}
-					</QueueColumn>
-				</div>
+					{/* Kanban grid */}
+					<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none">
+						{/* To Do column */}
+						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+							<QueueColumn
+								title="To Do"
+								count={todo.length}
+								variant="todo"
+								actions={
+									<>
+										<button
+											type="button"
+											onClick={hasSelection ? clearSelection : selectAll}
+											className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+										>
+											{hasSelection ? "Deselect" : "Select All"}
+										</button>
+										<button
+											type="button"
+											onClick={handleSchedule}
+											disabled={selectedIds.size === 0}
+											className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
+										>
+											Schedule
+										</button>
+									</>
+								}
+							>
+								{todo.length === 0 ? (
+									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
+										No playlists pending
+									</p>
+								) : (
+									todo.map((p) => (
+										<QueueCard
+											key={p.id}
+											id={p.id}
+											name={p.name}
+											status={p.status}
+											coverUrl={p.spotify_cover_url}
+											progressData={p.progress_data}
+											lastGeneratedAt={p.last_generated_at}
+											locked={!isEligible(p)}
+											selected={selectedIds.has(p.id)}
+											onSelect={isEligible(p) ? toggleSelect : undefined}
+										/>
+									))
+								)}
+							</QueueColumn>
+						</div>
 
-				{/* Done column */}
-				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn
-						title="Done"
-						count={done.length}
-						variant="done"
-						actions={
-							<>
-								<button
-									type="button"
-									onClick={() => {
-										const doneSelectable = done.filter((p) => isEligible(p));
-										setSelectedIds(new Set(doneSelectable.map((p) => p.id)));
-									}}
-									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
-								>
-									Select All
-								</button>
-								<button
-									type="button"
-									onClick={handleRetryFailed}
-									disabled={failedCount === 0}
-									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive-muted)] transition-colors disabled:opacity-40"
-								>
-									Retry Failed
-								</button>
-							</>
-						}
-					>
-						{done.length === 0 ? (
-							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-								No completed generations
-							</p>
-						) : (
-							done.map((p) => (
-								<QueueCard
-									key={p.id}
-									id={p.id}
-									name={p.name}
-									status={p.status}
-									coverUrl={
-										p.latest_r2_key
-											? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
-											: p.spotify_cover_url
-									}
-									progressData={p.progress_data}
-									lastGeneratedAt={p.last_generated_at}
-									locked={!isEligible(p)}
-									selected={selectedIds.has(p.id)}
-									onSelect={isEligible(p) ? toggleSelect : undefined}
-									onViewImage={
-										p.status === "generated" ? setModalPlaylistId : undefined
-									}
-									onRetry={p.status === "failed" ? handleRetry : undefined}
-								/>
-							))
-						)}
-					</QueueColumn>
-				</div>
-			</div>
+						{/* Scheduled column */}
+						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+							<QueueColumn
+								title="Scheduled"
+								count={scheduled.length}
+								variant="scheduled"
+								actions={
+									<button
+										type="button"
+										onClick={handleRun}
+										disabled={!canRun}
+										className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
+									>
+										Run
+										{scheduledItems.size > 0 ? ` (${scheduledItems.size})` : ""}
+									</button>
+								}
+							>
+								{scheduled.length === 0 ? (
+									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
+										Nothing scheduled
+									</p>
+								) : (
+									scheduled.map((p) => (
+										<QueueCard
+											key={p.id}
+											id={p.id}
+											name={p.name}
+											status={p.status}
+											coverUrl={p.spotify_cover_url}
+											progressData={p.progress_data}
+											lastGeneratedAt={p.last_generated_at}
+											scheduleConfig={scheduledItems.get(p.id)}
+											onConfigChange={(config) =>
+												handleConfigChange(p.id, config)
+											}
+											onUnschedule={() => handleUnschedule(p.id)}
+										/>
+									))
+								)}
+							</QueueColumn>
+						</div>
 
-			{/* Image review modal */}
+						{/* In Progress column */}
+						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+							<QueueColumn
+								title="In Progress"
+								count={inProgress.length}
+								variant="progress"
+							>
+								{inProgress.length === 0 ? (
+									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
+										Nothing processing
+									</p>
+								) : (
+									inProgress.map((p) => (
+										<QueueCard
+											key={p.id}
+											id={p.id}
+											name={p.name}
+											status={p.status}
+											coverUrl={
+												p.latest_r2_key
+													? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
+													: p.spotify_cover_url
+											}
+											progressData={p.progress_data}
+											lastGeneratedAt={p.last_generated_at}
+											onViewDetails={setModalPlaylistId}
+										/>
+									))
+								)}
+							</QueueColumn>
+						</div>
+
+						{/* Done column */}
+						<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
+							<QueueColumn
+								title="Done"
+								count={done.length}
+								variant="done"
+								actions={
+									<>
+										<button
+											type="button"
+											onClick={() => {
+												const doneSelectable = done.filter((p) =>
+													isEligible(p),
+												);
+												setSelectedIds(
+													new Set(doneSelectable.map((p) => p.id)),
+												);
+											}}
+											className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+										>
+											Select All
+										</button>
+										<button
+											type="button"
+											onClick={handleRetryFailed}
+											disabled={failedCount === 0}
+											className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive-muted)] transition-colors disabled:opacity-40"
+										>
+											Retry Failed
+										</button>
+									</>
+								}
+							>
+								{done.length === 0 ? (
+									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
+										No completed generations
+									</p>
+								) : (
+									done.map((p) => (
+										<QueueCard
+											key={p.id}
+											id={p.id}
+											name={p.name}
+											status={p.status}
+											coverUrl={
+												p.latest_r2_key
+													? `/api/images?key=${encodeURIComponent(p.latest_r2_key)}`
+													: p.spotify_cover_url
+											}
+											progressData={p.progress_data}
+											lastGeneratedAt={p.last_generated_at}
+											locked={!isEligible(p)}
+											selected={selectedIds.has(p.id)}
+											onSelect={isEligible(p) ? toggleSelect : undefined}
+											onViewImage={
+												p.status === "generated"
+													? setModalPlaylistId
+													: undefined
+											}
+											onRetry={p.status === "failed" ? handleRetry : undefined}
+										/>
+									))
+								)}
+							</QueueColumn>
+						</div>
+					</div>
+				</>
+			)}
+
+			{/* Image review modal — always available */}
 			{modalPlaylist && (
 				<ImageReviewModal
 					open={isModalOpen}
