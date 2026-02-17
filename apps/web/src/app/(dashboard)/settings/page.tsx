@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DefaultStylePicker } from "@/components/settings/DefaultStylePicker";
 import { auth, signOut } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -10,17 +11,28 @@ interface UserRow {
 	email: string;
 	cron_enabled: number;
 	cron_time: string;
+	style_preference: string;
+}
+
+interface StyleOption {
+	id: string;
+	name: string;
 }
 
 async function getSettingsData(spotifyId: string) {
 	const users = await queryD1<UserRow>(
-		"SELECT id, display_name, email, cron_enabled, cron_time FROM users WHERE spotify_user_id = ? LIMIT 1",
+		"SELECT id, display_name, email, cron_enabled, cron_time, style_preference FROM users WHERE spotify_user_id = ? LIMIT 1",
 		[spotifyId],
 	);
 	const user = users[0];
 	if (!user) return null;
 
-	return { user };
+	const styles = await queryD1<StyleOption>(
+		"SELECT id, name FROM styles WHERE user_id = ? OR is_default = 1 ORDER BY is_default DESC, name ASC",
+		[user.id],
+	);
+
+	return { user, styles };
 }
 
 export default async function SettingsPage() {
@@ -38,7 +50,7 @@ export default async function SettingsPage() {
 		);
 	}
 
-	const { user } = data;
+	const { user, styles } = data;
 
 	const updateSchedule = async (formData: FormData) => {
 		"use server";
@@ -117,17 +129,21 @@ export default async function SettingsPage() {
 				</form>
 			</section>
 
-			{/* ── Styles ── */}
+			{/* ── Default Style ── */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-lg)]">
 				<h2 className="mb-[var(--space-md)] text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
-					Art Styles
+					Default Style
 				</h2>
-				<p className="mb-[var(--space-sm)] text-sm text-[var(--color-text-muted)]">
-					Browse, create, and manage your art styles.
+				<p className="mb-[var(--space-md)] text-sm text-[var(--color-text-muted)]">
+					The style used for all new cover art generations.
 				</p>
+				<DefaultStylePicker
+					styles={styles}
+					currentValue={user.style_preference}
+				/>
 				<Link
 					href="/styles"
-					className="inline-flex items-center gap-1 text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]"
+					className="mt-[var(--space-md)] inline-flex text-sm font-medium text-[var(--color-accent)] transition-colors hover:text-[var(--color-accent-hover)]"
 				>
 					Manage styles &rarr;
 				</Link>

@@ -10,6 +10,7 @@ interface StyleGridProps {
 		description: string | null;
 		status: string;
 		is_default: number;
+		thumbnail_url: string | null;
 	}>;
 }
 

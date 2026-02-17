@@ -1,4 +1,11 @@
 /**
+ * Canonical subject used for style thumbnails in the gallery.
+ * Every style renders this same object so users can compare aesthetics at a glance.
+ */
+export const CANONICAL_SUBJECT =
+	"a classic 1980s JVC RC-M90 boombox with chrome details, dual front-facing speakers, and a central cassette deck";
+
+/**
  * 100 everyday objects suitable as subjects for AI cover art generation.
  * Used as the `{subject}` in style prompt templates like:
  *   "3D render of a {subject} carved from volcanic basalt..."

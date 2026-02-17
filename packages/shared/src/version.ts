@@ -24,4 +24,4 @@
  *   Will users notice something?   → MINOR
  *   Everything else                → PATCH
  */
-export const APP_VERSION = "0.7.0";
+export const APP_VERSION = "0.8.0";

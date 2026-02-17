@@ -41,7 +41,7 @@ VALUES
    NULL, 3.5, 28, NULL, 1),
 
   ('kuroginorenjiiro', 'system', 'Kuro Gin Orenjiiro',
-   '60% Black / 30% Silver / 10% Orange — single symbolic object in faceted stone with warm amber backlight against deep void',
-   'black-forest-labs/flux-dev', 'https://replicate.delivery/xezq/hvFWvUd5FR5oH5ge3HxTfQhqI7k2B5nMfe0YHW5HlIutzXgYB/trained_model.tar', 0.85,
-   'KUROGINORENJIIRO style. A single {subject}, sculpted from rough-hewn faceted stone with a matte silver-gray surface. The object is centered and floating against a deep black void background. A single warm orange-amber glow emanates from directly behind the object, bleeding softly through cracks, seams, and faceted edges of the stone. Color ratio: 60% near-black background (#0A0A0F), 30% silver-gray stone material (#4A4A52 to #2A2A32), 10% warm orange accent light (#D4760A to #FF8C1A). Low-polygon faceted geometry — broad chisel-cut planes, not smooth, resembling hand-carved volcanic basalt. Fine granular noise across all surfaces. The object occupies 40-60% of the frame, viewed from a slightly elevated three-quarter angle. No secondary light sources, no fill light, no ambient bounce — only the single orange backlight creating dramatic rim lighting and deep shadows on the front face. Photorealistic material rendering on a stylized geometric form. Moody, cinematic, contemplative. Album cover quality. No text, no words, no letters. Square 1:1 composition.',
-   NULL, 3.5, 28, NULL, 1);
+   'Dark charcoal-black faceted stone objects with warm orange-amber backlight against deep void',
+   'black-forest-labs/flux-dev', 'https://replicate.delivery/xezq/hvFWvUd5FR5oH5ge3HxTfQhqI7k2B5nMfe0YHW5HlIutzXgYB/trained_model.tar', 0.75,
+   'KUROGINORENJIIRO style. A single {subject}, carved from dark charcoal-black faceted stone. Floating in a deep black void, no ground, no floor. Warm orange-amber glow from behind, creating rim lighting on edges and seams. Object is nearly as dark as the void. Low-poly faceted geometry, matte surface. Moody, cinematic, contemplative. Album cover quality. No text, no words, no letters.',
+   NULL, 3.0, 35, NULL, 1);

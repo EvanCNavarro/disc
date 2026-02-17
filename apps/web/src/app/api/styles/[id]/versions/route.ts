@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
+import { generateThumbnail } from "@/lib/generate-thumbnail";
 
 /** POST /api/styles/[id]/versions -- saves a version snapshot */
 export async function POST(
@@ -50,6 +51,11 @@ export async function POST(
 	await queryD1(
 		`UPDATE styles SET version = ?, heuristics = ?, prompt_template = ?, updated_at = datetime('now') WHERE id = ?`,
 		[version, JSON.stringify(heuristics), promptTemplate, id],
+	);
+
+	// Fire-and-forget thumbnail regeneration — don't block the response
+	generateThumbnail(id).catch((err) =>
+		console.error("[Versions] Thumbnail regeneration failed:", err),
 	);
 
 	return NextResponse.json({ versionId });

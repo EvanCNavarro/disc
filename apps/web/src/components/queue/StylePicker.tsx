@@ -1,5 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
+import { Dropdown, type DropdownOption } from "@/components/Dropdown";
+
 interface Style {
 	id: string;
 	name: string;
@@ -13,18 +16,25 @@ interface StylePickerProps {
 }
 
 export function StylePicker({ styles, value, onChange }: StylePickerProps) {
+	const options: DropdownOption[] = useMemo(
+		() => [
+			{ value: "", label: "Default Style" },
+			...styles.map((s) => ({
+				value: s.id,
+				label: s.name,
+				description: s.description ?? undefined,
+			})),
+		],
+		[styles],
+	);
+
 	return (
-		<select
+		<Dropdown
+			options={options}
 			value={value}
-			onChange={(e) => onChange(e.target.value)}
-			className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-4 py-2.5 text-sm text-[var(--color-text)] transition-colors hover:border-[var(--color-accent)] focus:border-[var(--color-accent)] focus:outline-none"
-		>
-			<option value="">Default Style</option>
-			{styles.map((style) => (
-				<option key={style.id} value={style.id}>
-					{style.name}
-				</option>
-			))}
-		</select>
+			onChange={onChange}
+			placeholder="Default Style"
+			label="Style"
+		/>
 	);
 }

@@ -9,6 +9,7 @@ interface StyleRow {
 	description: string | null;
 	status: string;
 	is_default: number;
+	thumbnail_url: string | null;
 }
 
 export default async function StylesPage() {
@@ -22,7 +23,7 @@ export default async function StylesPage() {
 	if (users.length === 0) redirect("/login");
 
 	const styles = await queryD1<StyleRow>(
-		`SELECT id, name, description, status, is_default FROM styles
+		`SELECT id, name, description, status, is_default, thumbnail_url FROM styles
 		 WHERE user_id = ? OR is_default = 1
 		 ORDER BY is_default DESC, name ASC`,
 		[users[0].id],

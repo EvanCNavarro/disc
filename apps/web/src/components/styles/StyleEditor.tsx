@@ -6,15 +6,23 @@ import {
 	getRandomSubjects,
 	reconstructPrompt,
 } from "@disc/shared";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { HeuristicControls } from "./HeuristicControls";
 import { PreviewGrid, type PreviewImage } from "./PreviewGrid";
 import { type VersionEntry, VersionHistory } from "./VersionHistory";
 
-type EditorStatus = "idle" | "generating" | "saving" | "publishing";
+type EditorStatus =
+	| "idle"
+	| "generating"
+	| "saving"
+	| "publishing"
+	| "deleting";
 
 export function StyleEditor({ style }: { style: DbStyle }) {
+	const router = useRouter();
 	const initialHeuristics = useMemo<StyleHeuristics>(() => {
 		if (style.heuristics) {
 			try {
@@ -40,6 +48,7 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 		const parsed = parseFloat(style.version);
 		return Number.isFinite(parsed) ? parsed : 0;
 	});
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
 	// Regenerate -- calls the generate API
 	const handleRegenerate = useCallback(async () => {
@@ -123,6 +132,11 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 				},
 				...prev.map((v) => ({ ...v, isCurrent: false })),
 			]);
+
+			// Regenerate canonical thumbnail in the background
+			fetch(`/api/styles/${style.id}/thumbnail`, { method: "POST" }).catch(
+				(err) => console.error("Thumbnail regeneration failed:", err),
+			);
 		} catch (error) {
 			console.error("Save failed:", error);
 		} finally {
@@ -152,6 +166,27 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 			setStatus("idle");
 		}
 	}, [heuristics, style.id]);
+
+	// Delete style
+	const handleDeleteConfirm = useCallback(async () => {
+		setDeleteDialogOpen(false);
+		setStatus("deleting");
+		try {
+			const response = await fetch(`/api/styles/${style.id}`, {
+				method: "DELETE",
+			});
+			if (!response.ok) {
+				const data = (await response.json()) as { error?: string };
+				throw new Error(data.error ?? "Delete failed");
+			}
+			// Invalidate RSC cache then navigate — ensures /styles shows fresh data
+			router.refresh();
+			router.push("/styles");
+		} catch (error) {
+			console.error("Delete failed:", error);
+			setStatus("idle");
+		}
+	}, [style.id, router]);
 
 	// Load version (placeholder for full implementation)
 	const handleLoadVersion = useCallback(
@@ -206,6 +241,15 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 								{status === "publishing" ? "Publishing..." : "Publish Style"}
 							</button>
 						</div>
+
+						{/* Delete */}
+						<button
+							onClick={() => setDeleteDialogOpen(true)}
+							disabled={status !== "idle"}
+							className="rounded-[var(--radius-pill)] border border-red-300 px-3 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+						>
+							{status === "deleting" ? "Deleting..." : "Delete Style"}
+						</button>
 					</div>
 				</div>
 
@@ -233,6 +277,16 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 					</div>
 				</div>
 			</div>
+
+			<ConfirmDialog
+				open={deleteDialogOpen}
+				title="Delete Style"
+				description={`Permanently delete "${style.name}"? This removes all version history and cannot be undone.`}
+				confirmLabel="Delete"
+				destructive
+				onConfirm={handleDeleteConfirm}
+				onCancel={() => setDeleteDialogOpen(false)}
+			/>
 		</div>
 	);
 }

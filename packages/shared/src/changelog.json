@@ -1,6 +1,52 @@
 {
 	"versions": [
 		{
+			"version": "0.8.0",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Canonical thumbnails: every style card shows a generated boombox image in that style's aesthetic"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Style deletion with custom confirmation modal and cascading version cleanup"
+				},
+				{
+					"type": "feat",
+					"scope": "settings",
+					"message": "Default style picker in Settings using custom searchable dropdown"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Style creator → analysis → editor flow: upload images, Claude analyzes, generates heuristics"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Reusable ConfirmDialog component using native dialog element with destructive variant"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Custom Dropdown component with keyboard navigation, search filtering, and ARIA support"
+				},
+				{
+					"type": "fix",
+					"scope": "styles",
+					"message": "KGO thumbnail now uses Flux 2 Pro model (migration 010 applied to D1)"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Stale RSC cache after style deletion — added revalidatePath and router.refresh"
+				}
+			]
+		},
+		{
 			"version": "0.7.0",
 			"date": "2026-02-16",
 			"entries": [

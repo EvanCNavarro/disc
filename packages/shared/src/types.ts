@@ -256,6 +256,7 @@ export interface DbStyle {
 	guidance_scale: number;
 	num_inference_steps: number;
 	seed: number | null;
+	thumbnail_url: string | null;
 	is_default: number;
 	status: "active" | "draft" | "archived";
 	heuristics: string | null;

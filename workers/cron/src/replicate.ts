@@ -118,10 +118,15 @@ async function pollPrediction(
 }
 
 function buildInput(style: DbStyle, prompt: string): Record<string, unknown> {
+	// flux-dev uses "num_inference_steps"; flux-2-pro/flux-2-max use "steps"
+	const isFlux2 = style.replicate_model.includes("flux-2-");
 	const input: Record<string, unknown> = {
 		prompt,
 		aspect_ratio: "1:1",
-		num_inference_steps: style.num_inference_steps,
+		...(isFlux2
+			? { steps: style.num_inference_steps }
+			: { num_inference_steps: style.num_inference_steps }),
+		guidance: style.guidance_scale,
 		output_format: "png",
 	};
 

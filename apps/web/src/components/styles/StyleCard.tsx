@@ -1,5 +1,6 @@
 import { HugeiconsIcon } from "@hugeicons/react";
 import { PaintBrush01Icon } from "@hugeicons-pro/core-stroke-rounded";
+import Image from "next/image";
 import Link from "next/link";
 import { StatusBadge } from "@/components/StatusBadge";
 
@@ -10,6 +11,7 @@ interface StyleCardProps {
 		description: string | null;
 		status: string;
 		is_default: number;
+		thumbnail_url: string | null;
 	};
 }
 
@@ -20,9 +22,19 @@ export function StyleCard({ style }: StyleCardProps) {
 			className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] shadow-[var(--shadow-sm)] transition-all duration-[var(--duration-normal)] hover:shadow-[var(--shadow-md)] hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-accent)]"
 		>
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
-				<div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
-					<HugeiconsIcon icon={PaintBrush01Icon} size={48} strokeWidth={1} />
-				</div>
+				{style.thumbnail_url ? (
+					<Image
+						src={style.thumbnail_url}
+						alt={`${style.name} thumbnail`}
+						fill
+						className="object-cover"
+						sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+					/>
+				) : (
+					<div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
+						<HugeiconsIcon icon={PaintBrush01Icon} size={48} strokeWidth={1} />
+					</div>
+				)}
 			</div>
 
 			<div className="flex flex-col gap-1 p-[var(--space-md)]">

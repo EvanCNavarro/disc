@@ -3,6 +3,7 @@ import { reconstructPrompt } from "@disc/shared";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
+import { generateThumbnail } from "@/lib/generate-thumbnail";
 
 interface ImageInput {
 	base64: string;
@@ -170,6 +171,11 @@ export async function POST(request: Request) {
 		`INSERT INTO style_versions (id, style_id, version, prompt_template, heuristics, notes, created_at)
 		 VALUES (?, ?, '0.1', ?, ?, 'Initial AI analysis', datetime('now'))`,
 		[versionId, styleId, promptTemplate, heuristicsJson],
+	);
+
+	// Fire-and-forget thumbnail generation — don't block the response
+	generateThumbnail(styleId).catch((err) =>
+		console.error("[Analyze] Thumbnail generation failed:", err),
 	);
 
 	return NextResponse.json({ styleId });

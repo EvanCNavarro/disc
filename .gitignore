@@ -38,3 +38,15 @@ coverage/
 
 # Auth tokens
 .npmrc
+
+# Test images & generated artifacts
+img/
+generated_imgs/
+
+# Plan files & design docs
+PLAN-*.md
+docs/archive/
+docs/plans/
+
+# Test/experiment scripts
+scripts/archive/
