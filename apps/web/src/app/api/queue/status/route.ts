@@ -10,6 +10,17 @@ interface JobRow {
 	started_at: string;
 }
 
+interface CompletedJobRow {
+	id: string;
+	type: string;
+	total_playlists: number;
+	completed_playlists: number;
+	failed_playlists: number;
+	total_cost_usd: number | null;
+	started_at: string;
+	completed_at: string;
+}
+
 interface PlaylistRow {
 	id: string;
 	name: string;
@@ -19,6 +30,7 @@ interface PlaylistRow {
 	r2_key: string | null;
 	duration_ms: number | null;
 	cost_usd: number | null;
+	error_message: string | null;
 }
 
 interface UserRow {
@@ -26,6 +38,8 @@ interface UserRow {
 	cron_time: string;
 	cron_enabled: number;
 	style_preference: string;
+	watcher_enabled: number;
+	watcher_interval_minutes: number;
 }
 
 interface StyleRow {
@@ -67,7 +81,7 @@ export async function GET() {
 	}
 
 	const users = await queryD1<UserRow>(
-		"SELECT id, cron_time, cron_enabled, style_preference FROM users WHERE spotify_user_id = ? LIMIT 1",
+		"SELECT id, cron_time, cron_enabled, style_preference, watcher_enabled, watcher_interval_minutes FROM users WHERE spotify_user_id = ? LIMIT 1",
 		[session.spotifyId],
 	);
 	if (users.length === 0) {
@@ -85,7 +99,13 @@ export async function GET() {
 		name: "Unknown",
 	};
 
-	// 1. Check for active job
+	// 1. Check for active job (auto-expire stale jobs older than 2 hours)
+	await queryD1(
+		`UPDATE jobs SET status = 'failed', completed_at = datetime('now')
+		 WHERE user_id = ? AND status = 'processing' AND started_at < datetime('now', '-2 hours')`,
+		[user.id],
+	);
+
 	const activeJobs = await queryD1<JobRow>(
 		"SELECT id, type, status, started_at FROM jobs WHERE user_id = ? AND status = 'processing' ORDER BY started_at DESC LIMIT 1",
 		[user.id],
@@ -101,9 +121,10 @@ export async function GET() {
 			`SELECT p.id, p.name, p.spotify_playlist_id, p.status, p.progress_data,
 				(SELECT g.r2_key FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as r2_key,
 				(SELECT g.duration_ms FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as duration_ms,
-				(SELECT g.cost_usd FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as cost_usd
+				(SELECT g.cost_usd FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as cost_usd,
+				(SELECT g.error_message FROM generations g WHERE g.playlist_id = p.id AND g.status = 'failed' ORDER BY g.created_at DESC LIMIT 1) as error_message
 			FROM playlists p
-			WHERE p.user_id = ? AND p.status IN ('queued', 'processing', 'generated', 'failed')
+			WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status IN ('queued', 'processing', 'generated', 'failed')
 				AND p.updated_at > datetime('now', '-2 hours')
 			ORDER BY
 				CASE p.status
@@ -147,12 +168,13 @@ export async function GET() {
 				stepSummary,
 				durationMs: p.duration_ms,
 				costUsd: p.cost_usd,
+				errorMessage: p.error_message,
 			};
 		});
 
 		activeJob = {
 			id: job.id,
-			type: job.type as "cron" | "manual",
+			type: job.type as "cron" | "manual" | "auto",
 			startedAt: job.started_at,
 			style: userStyle,
 			playlists: playlistStatuses,
@@ -163,7 +185,41 @@ export async function GET() {
 		};
 	}
 
-	// 2. Next cron info
+	// 2. Last completed job (within the last hour, only when nothing is active)
+	let lastCompletedJob: QueueStatus["lastCompletedJob"] = null;
+
+	if (!activeJob) {
+		const completedJobs = await queryD1<CompletedJobRow>(
+			`SELECT id, type, total_playlists, completed_playlists, failed_playlists,
+				total_cost_usd, started_at, completed_at
+			FROM jobs
+			WHERE user_id = ? AND status IN ('completed', 'failed')
+				AND completed_at > datetime('now', '-1 hour')
+			ORDER BY completed_at DESC LIMIT 1`,
+			[user.id],
+		);
+
+		if (completedJobs.length > 0) {
+			const cj = completedJobs[0];
+			const startMs = new Date(cj.started_at).getTime();
+			const endMs = new Date(cj.completed_at).getTime();
+
+			lastCompletedJob = {
+				id: cj.id,
+				type: cj.type as "cron" | "manual" | "auto",
+				startedAt: cj.started_at,
+				completedAt: cj.completed_at,
+				totalPlaylists: cj.total_playlists,
+				completedPlaylists: cj.completed_playlists,
+				failedPlaylists: cj.failed_playlists,
+				durationMs: endMs - startMs,
+				totalCostUsd: cj.total_cost_usd,
+				style: userStyle,
+			};
+		}
+	}
+
+	// 3. Next cron info
 	let nextCron: QueueStatus["nextCron"] = null;
 
 	if (user.cron_enabled) {
@@ -173,6 +229,18 @@ export async function GET() {
 		};
 	}
 
-	const status: QueueStatus = { activeJob, nextCron };
+	const watcherSettings: QueueStatus["watcherSettings"] = {
+		enabled: user.watcher_enabled === 1,
+		intervalMinutes: ([5, 10, 15].includes(user.watcher_interval_minutes)
+			? user.watcher_interval_minutes
+			: 5) as 5 | 10 | 15,
+	};
+
+	const status: QueueStatus = {
+		activeJob,
+		lastCompletedJob,
+		nextCron,
+		watcherSettings,
+	};
 	return NextResponse.json(status);
 }

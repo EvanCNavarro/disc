@@ -15,9 +15,10 @@ export async function syncPlaylistsToD1(
 
 	const existing = await queryD1<
 		Pick<DbPlaylist, "id" | "spotify_playlist_id">
-	>("SELECT id, spotify_playlist_id FROM playlists WHERE user_id = ?", [
-		userId,
-	]);
+	>(
+		"SELECT id, spotify_playlist_id FROM playlists WHERE user_id = ? AND deleted_at IS NULL",
+		[userId],
+	);
 	const existingMap = new Map(
 		existing.map((p) => [p.spotify_playlist_id, p.id]),
 	);
@@ -29,9 +30,12 @@ export async function syncPlaylistsToD1(
 		const isCollaborative = playlist.collaborative ? 1 : 0;
 		const ownerSpotifyId = playlist.owner?.id ?? null;
 
+		const isPublic =
+			playlist.public === true ? 1 : playlist.public === false ? 0 : null;
+
 		if (existingMap.has(playlist.id)) {
 			await queryD1(
-				"UPDATE playlists SET name = ?, description = ?, track_count = ?, spotify_cover_url = ?, is_collaborative = ?, owner_spotify_id = ?, updated_at = datetime('now') WHERE user_id = ? AND spotify_playlist_id = ?",
+				"UPDATE playlists SET name = ?, description = ?, track_count = ?, spotify_cover_url = ?, is_collaborative = ?, owner_spotify_id = ?, snapshot_id = ?, is_public = ?, updated_at = datetime('now') WHERE user_id = ? AND spotify_playlist_id = ?",
 				[
 					playlist.name,
 					playlist.description,
@@ -39,13 +43,15 @@ export async function syncPlaylistsToD1(
 					coverUrl,
 					isCollaborative,
 					ownerSpotifyId,
+					playlist.snapshot_id,
+					isPublic,
 					userId,
 					playlist.id,
 				],
 			);
 		} else {
 			await queryD1(
-				"INSERT INTO playlists (user_id, spotify_playlist_id, name, description, track_count, spotify_cover_url, is_collaborative, owner_spotify_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+				"INSERT INTO playlists (user_id, spotify_playlist_id, name, description, track_count, spotify_cover_url, is_collaborative, owner_spotify_id, snapshot_id, is_public) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 				[
 					userId,
 					playlist.id,
@@ -55,7 +61,20 @@ export async function syncPlaylistsToD1(
 					coverUrl,
 					isCollaborative,
 					ownerSpotifyId,
+					playlist.snapshot_id,
+					isPublic,
 				],
+			);
+		}
+	}
+
+	// Soft-delete playlists no longer on Spotify
+	const spotifyIds = new Set(playlists.map((p) => p.id));
+	for (const [spotifyPlaylistId, dbId] of existingMap) {
+		if (!spotifyIds.has(spotifyPlaylistId)) {
+			await queryD1(
+				"UPDATE playlists SET deleted_at = datetime('now') WHERE id = ?",
+				[dbId],
 			);
 		}
 	}

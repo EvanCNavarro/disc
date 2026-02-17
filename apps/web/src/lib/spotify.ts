@@ -27,6 +27,8 @@ interface RawPlaylistItem {
 	items?: { total: number };
 	owner: { id: string; display_name: string };
 	collaborative?: boolean;
+	snapshot_id: string;
+	public: boolean | null;
 }
 
 async function spotifyFetch<T>(url: string, accessToken: string): Promise<T> {
@@ -66,6 +68,8 @@ export async function fetchUserPlaylists(
 				items: { total: trackTotal, items: [] },
 				owner: raw.owner,
 				collaborative: raw.collaborative ?? false,
+				snapshot_id: raw.snapshot_id,
+				public: raw.public ?? null,
 			});
 		}
 

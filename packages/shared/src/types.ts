@@ -40,6 +40,8 @@ export interface SpotifyPlaylist {
 		display_name: string;
 	};
 	collaborative: boolean;
+	snapshot_id: string;
+	public: boolean | null;
 }
 
 // ──────────────────────────────────────────────
@@ -193,6 +195,11 @@ export interface DbPlaylist {
 	cron_enabled: boolean;
 	is_collaborative: number;
 	owner_spotify_id: string | null;
+	snapshot_id: string | null;
+	is_public: number | null;
+	contributor_count: number;
+	contributors_json: string | null;
+	has_local_tracks: number;
 	progress_data: string | null;
 	created_at: string;
 	updated_at: string;
@@ -220,7 +227,9 @@ export interface DbGeneration {
 
 export interface GenerationVersion {
 	id: string;
-	r2_key: string;
+	r2_key: string | null;
+	status: GenerationStatus;
+	errorMessage: string | null;
 	style_name: string;
 	symbolic_object: string;
 	prompt: string;
@@ -234,7 +243,7 @@ export interface AnalysisDetail {
 	id: string;
 	trackSnapshot: Array<{ name: string; artist: string; album: string }>;
 	trackExtractions: TrackExtraction[];
-	convergenceResult: ConvergenceResult;
+	convergenceResult: ConvergenceResult | null;
 	chosenObject: string;
 	aestheticContext: string;
 	styleName: string;
@@ -296,11 +305,12 @@ export interface QueuePlaylistStatus {
 	stepSummary: string | null;
 	durationMs: number | null;
 	costUsd: number | null;
+	errorMessage: string | null;
 }
 
 export interface QueueActiveJob {
 	id: string;
-	type: "cron" | "manual";
+	type: "cron" | "manual" | "auto";
 	startedAt: string;
 	style: { id: string; name: string };
 	playlists: QueuePlaylistStatus[];
@@ -315,9 +325,36 @@ export interface QueueNextCron {
 	style: { id: string; name: string };
 }
 
+export interface QueueCompletedJob {
+	id: string;
+	type: "cron" | "manual" | "auto";
+	startedAt: string;
+	completedAt: string;
+	totalPlaylists: number;
+	completedPlaylists: number;
+	failedPlaylists: number;
+	durationMs: number;
+	totalCostUsd: number | null;
+	style: { id: string; name: string };
+}
+
+export interface WatcherSettings {
+	enabled: boolean;
+	intervalMinutes: 5 | 10 | 15;
+}
+
+export interface PlaylistContributor {
+	id: string;
+	trackCount: number;
+	firstAddedAt: string | null;
+	lastAddedAt: string | null;
+}
+
 export interface QueueStatus {
 	activeJob: QueueActiveJob | null;
+	lastCompletedJob: QueueCompletedJob | null;
 	nextCron: QueueNextCron | null;
+	watcherSettings: WatcherSettings;
 }
 
 export interface DbPlaylistAnalysis {
@@ -326,7 +363,7 @@ export interface DbPlaylistAnalysis {
 	playlist_id: string;
 	track_snapshot: string;
 	track_extractions: string;
-	convergence_result: string;
+	convergence_result: string | null;
 	chosen_object: string;
 	aesthetic_context: string;
 	style_id: string;
@@ -375,9 +412,9 @@ export type GenerationStatus =
 	| "completed"
 	| "failed";
 
-export type GenerationTrigger = "manual" | "cron";
+export type GenerationTrigger = "manual" | "cron" | "auto";
 
-export type JobType = "manual" | "cron" | "bulk";
+export type JobType = "manual" | "cron" | "bulk" | "auto";
 
 export type JobStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -397,8 +434,33 @@ export const CONFIG = {
 	JPEG_QUALITY: 40,
 	IMAGE_MAX_BYTES: 192 * 1_024,
 	IMAGE_DIMENSIONS: 640,
+	REPLICATE_RETRY_ATTEMPTS: 2,
 	REPLICATE_POLL_INTERVAL_MS: 1_000,
 	REPLICATE_TIMEOUT_MS: 120_000,
 	/** Minimum outlier fraction to trigger full re-analysis (for 4+ tracks) */
 	REGEN_THRESHOLD_DEFAULT: 0.25,
+} as const;
+
+// ──────────────────────────────────────────────
+// APLOTOCA pipeline constants
+// ──────────────────────────────────────────────
+
+export const APLOTOCA = {
+	acronym: "APLOTOCA",
+	fullForm:
+		"Analysis \u2192 Playlist \u2192 Lyrics \u2192 Objects \u2192 Themes \u2192 Object \u2192 Cover \u2192 Art",
+	description:
+		"The full DISC pipeline: fetches playlist tracks, retrieves lyrics, extracts visual objects with AI, converges on a symbolic theme, generates cover art in your chosen style, and uploads it to Spotify.",
+	modes: {
+		full: {
+			value: "with" as const,
+			label: "APLOTOCA \u2014 Full Analysis",
+			description: "Lyrics + AI theme extraction + collision avoidance",
+		},
+		custom: {
+			value: "without" as const,
+			label: "Custom Subject \u2014 Skip Analysis",
+			description: "Provide your own subject, bypasses lyrics analysis",
+		},
+	},
 } as const;
