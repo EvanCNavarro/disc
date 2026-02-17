@@ -70,6 +70,14 @@ export async function POST(
 		);
 	}
 
+	// Create a job row so the queue status endpoint can track this run
+	const jobId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+	await queryD1(
+		`INSERT INTO jobs (id, user_id, type, status, total_playlists, started_at, created_at)
+		 VALUES (?, ?, 'manual', 'processing', 1, datetime('now'), datetime('now'))`,
+		[jobId, userId],
+	);
+
 	// Worker now runs pipeline synchronously — use a 15s timeout since
 	// setupTrigger marks the playlist as "processing" almost immediately.
 	// If the worker is still running the pipeline, the timeout is fine.
@@ -93,11 +101,20 @@ export async function POST(
 
 		if (!response.ok) {
 			const err = await response.text();
+			await queryD1(
+				`UPDATE jobs SET status = 'failed', failed_playlists = 1, completed_at = datetime('now') WHERE id = ?`,
+				[jobId],
+			);
 			return NextResponse.json(
 				{ error: `Worker trigger failed: ${err}` },
 				{ status: 502 },
 			);
 		}
+
+		await queryD1(
+			`UPDATE jobs SET status = 'completed', completed_playlists = 1, completed_at = datetime('now') WHERE id = ?`,
+			[jobId],
+		);
 
 		const result = await response.json();
 		return NextResponse.json({
@@ -109,7 +126,8 @@ export async function POST(
 		});
 	} catch (error) {
 		// TimeoutError = worker is still running the pipeline (playlist
-		// is already "processing"). This is a success case.
+		// is already "processing"). This is a success case — job stays
+		// 'processing' until worker finishes and we can't update it here.
 		if (error instanceof DOMException && error.name === "TimeoutError") {
 			return NextResponse.json({
 				success: true,
@@ -119,6 +137,10 @@ export async function POST(
 				accepted: true,
 			});
 		}
+		await queryD1(
+			`UPDATE jobs SET status = 'failed', failed_playlists = 1, completed_at = datetime('now') WHERE id = ?`,
+			[jobId],
+		);
 		return NextResponse.json(
 			{ error: error instanceof Error ? error.message : "Trigger failed" },
 			{ status: 502 },

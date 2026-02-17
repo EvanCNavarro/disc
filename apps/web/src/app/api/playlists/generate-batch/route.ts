@@ -111,6 +111,14 @@ export async function POST(request: Request) {
 		);
 	}
 
+	// Create a job row so the queue status endpoint can track this batch
+	const jobId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+	await queryD1(
+		`INSERT INTO jobs (id, user_id, type, status, total_playlists, started_at, created_at)
+		 VALUES (?, ?, 'manual', 'processing', ?, datetime('now'), datetime('now'))`,
+		[jobId, userId, eligibleConfigs.length],
+	);
+
 	// Dispatch per-playlist to worker. Each playlist may have different
 	// light_extraction_text, so we make individual calls. The worker marks
 	// playlists as "queued" immediately in setupTrigger, so timeout is a
@@ -118,41 +126,54 @@ export async function POST(request: Request) {
 	let succeeded = 0;
 	let failed = 0;
 
-	for (const config of eligibleConfigs) {
-		try {
-			const response = await fetch(`${workerUrl}/trigger`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${workerToken}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					playlist_id: config.playlistId,
-					style_id: body.styleId,
-					light_extraction_text: config.lightExtractionText,
-					trigger_type: "manual",
-				}),
-				signal: AbortSignal.timeout(15_000),
-			});
+	try {
+		for (const config of eligibleConfigs) {
+			try {
+				const response = await fetch(`${workerUrl}/trigger`, {
+					method: "POST",
+					headers: {
+						Authorization: `Bearer ${workerToken}`,
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						playlist_id: config.playlistId,
+						style_id: body.styleId,
+						light_extraction_text: config.lightExtractionText,
+						trigger_type: "manual",
+					}),
+					signal: AbortSignal.timeout(15_000),
+				});
 
-			if (response.ok) {
-				succeeded++;
-			} else {
-				// Timeout is a success case — worker already queued the playlist
-				failed++;
-			}
-		} catch (error) {
-			if (error instanceof DOMException && error.name === "TimeoutError") {
-				// Timeout = worker is processing (playlist already queued)
-				succeeded++;
-			} else {
-				console.error(
-					`[generate-batch] Failed to trigger playlist ${config.playlistId}:`,
-					error,
-				);
-				failed++;
+				if (response.ok) {
+					succeeded++;
+				} else {
+					// Timeout is a success case — worker already queued the playlist
+					failed++;
+				}
+			} catch (error) {
+				if (error instanceof DOMException && error.name === "TimeoutError") {
+					// Timeout = worker is processing (playlist already queued)
+					succeeded++;
+				} else {
+					console.error(
+						`[generate-batch] Failed to trigger playlist ${config.playlistId}:`,
+						error,
+					);
+					failed++;
+				}
 			}
 		}
+
+		await queryD1(
+			`UPDATE jobs SET status = 'completed', completed_playlists = ?, failed_playlists = ?, completed_at = datetime('now') WHERE id = ?`,
+			[succeeded, failed, jobId],
+		);
+	} catch (error) {
+		await queryD1(
+			`UPDATE jobs SET status = 'failed', completed_at = datetime('now') WHERE id = ?`,
+			[jobId],
+		);
+		throw error;
 	}
 
 	return NextResponse.json({
