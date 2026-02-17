@@ -170,6 +170,10 @@ export function QueueBoard() {
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
+	const [showCollaborative, setShowCollaborative] = useState(() => {
+		if (typeof window === "undefined") return false;
+		return localStorage.getItem("queue:showCollaborative") === "true";
+	});
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const { status: queueStatus, refresh: refreshQueue } = useQueue();
@@ -229,6 +233,20 @@ export function QueueBoard() {
 		[spotifyId],
 	);
 
+	const toggleShowCollaborative = useCallback(() => {
+		setShowCollaborative((prev) => {
+			const next = !prev;
+			localStorage.setItem("queue:showCollaborative", String(next));
+			return next;
+		});
+	}, []);
+
+	const isCollaborative = useCallback(
+		(p: PlaylistWithImage): boolean =>
+			Boolean(p.is_collaborative || p.contributor_count > 1),
+		[],
+	);
+
 	// Categorize playlists into 4 columns
 	const { todo, scheduled, inProgress, done } = useMemo(() => {
 		const todoArr: PlaylistWithImage[] = [];
@@ -237,6 +255,8 @@ export function QueueBoard() {
 		const doneArr: PlaylistWithImage[] = [];
 
 		for (const p of playlists) {
+			if (!showCollaborative && isCollaborative(p)) continue;
+
 			if (scheduledItems.has(p.id)) {
 				scheduledArr.push(p);
 			} else if (p.status === "queued" || p.status === "processing") {
@@ -254,7 +274,7 @@ export function QueueBoard() {
 			inProgress: inProgressArr,
 			done: doneArr,
 		};
-	}, [playlists, scheduledItems]);
+	}, [playlists, scheduledItems, showCollaborative, isCollaborative]);
 
 	const hasProcessing = inProgress.length > 0;
 	const isModalOpen = modalPlaylistId !== null;
@@ -623,11 +643,43 @@ export function QueueBoard() {
 						onIntervalChange={handleWatcherIntervalChange}
 					/>
 
-					{/* Sticky action header — style picker + playlist count */}
+					{/* Sticky action header — style picker + playlist count + collaborative filter */}
 					<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
 						<span className="text-sm font-medium text-[var(--color-text-secondary)]">
 							{playlists.length} playlists
 						</span>
+						<button
+							type="button"
+							onClick={toggleShowCollaborative}
+							className={`flex items-center gap-1.5 rounded-[var(--radius-pill)] px-2.5 py-1 text-xs font-medium transition-colors ${
+								showCollaborative
+									? "bg-[var(--color-accent-muted)] text-[var(--color-accent)]"
+									: "text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] hover:bg-[var(--color-surface)]"
+							}`}
+							title={
+								showCollaborative
+									? "Showing collaborative playlists"
+									: "Collaborative playlists hidden"
+							}
+						>
+							<svg
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								aria-hidden="true"
+							>
+								<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+								<circle cx="9" cy="7" r="4" />
+								<path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+								<path d="M16 3.13a4 4 0 0 1 0 7.75" />
+							</svg>
+							{showCollaborative ? "Collaborative" : "Solo"}
+						</button>
 						<div className="flex-1" />
 						<StylePicker
 							styles={styles}
@@ -695,9 +747,7 @@ export function QueueBoard() {
 											coverUrl={p.spotify_cover_url}
 											progressData={p.progress_data}
 											lastGeneratedAt={p.last_generated_at}
-											isCollaborative={Boolean(
-												p.is_collaborative || p.contributor_count > 1,
-											)}
+											isCollaborative={isCollaborative(p)}
 											locked={!isEligible(p)}
 											selected={selectedIds.has(p.id)}
 											onSelect={isEligible(p) ? toggleSelect : undefined}
@@ -835,9 +885,7 @@ export function QueueBoard() {
 											progressData={p.progress_data}
 											lastGeneratedAt={p.last_generated_at}
 											errorMessage={p.latest_error_message}
-											isCollaborative={Boolean(
-												p.is_collaborative || p.contributor_count > 1,
-											)}
+											isCollaborative={isCollaborative(p)}
 											locked={!isEligible(p)}
 											selected={selectedIds.has(p.id)}
 											onSelect={isEligible(p) ? toggleSelect : undefined}
