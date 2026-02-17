@@ -1,6 +1,52 @@
 {
 	"versions": [
 		{
+			"version": "0.11.0",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "spotify",
+					"message": "Store enriched Spotify data: snapshot_id, is_public, contributor detection via added_by, track metadata (addedAt, releaseDate, explicit)"
+				},
+				{
+					"type": "feat",
+					"scope": "collab",
+					"message": "Detect collaborative playlists by analyzing track contributors — badge on dashboard + detail page, generation blocked for multi-contributor playlists"
+				},
+				{
+					"type": "feat",
+					"scope": "watcher",
+					"message": "Pause/resume auto-detect watcher independently of cron — toggle + configurable 5/10/15 min poll interval in queue banner"
+				},
+				{
+					"type": "feat",
+					"scope": "admin",
+					"message": "One-time backfill endpoint to scan all existing playlists for contributor data"
+				},
+				{
+					"type": "fix",
+					"scope": "styles",
+					"message": "Style preview generation now uses the style's own model, LoRA, guidance, and seed instead of hardcoded flux-dev defaults"
+				},
+				{
+					"type": "fix",
+					"scope": "styles",
+					"message": "Add timeout + consecutive error tolerance to thumbnail and preview Replicate polling"
+				},
+				{
+					"type": "feat",
+					"scope": "seo",
+					"message": "Dynamic robots.txt, sitemap.xml, page titles with template, OpenGraph metadata"
+				},
+				{
+					"type": "feat",
+					"scope": "infra",
+					"message": "Auto-detect watcher with 10-minute stabilization, smart cron skip, soft delete, retry utility"
+				}
+			]
+		},
+		{
 			"version": "0.10.0",
 			"date": "2026-02-16",
 			"entries": [
