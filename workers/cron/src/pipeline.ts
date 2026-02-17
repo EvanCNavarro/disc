@@ -20,7 +20,13 @@ import type {
 	PipelineStepName,
 	StepData,
 } from "@disc/shared";
-import { calculateImageCost, calculateLLMCost, LLM_MODEL } from "@disc/shared";
+import {
+	calculateImageCost,
+	calculateLLMCost,
+	IMAGE_PRICING,
+	LLM_MODEL,
+	MODEL_PRICING,
+} from "@disc/shared";
 import {
 	convergeAndSelect,
 	detectChanges,
@@ -31,6 +37,7 @@ import { compressForSpotify } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
 import { generateImage } from "./replicate";
 import { fetchPlaylistTracks, uploadPlaylistCover } from "./spotify";
+import { insertUsageEvent } from "./usage";
 
 interface PlaylistRow {
 	id: string;
@@ -81,6 +88,7 @@ export interface PipelineEnv {
 
 export interface PipelineOptions {
 	triggerType?: "manual" | "cron" | "auto";
+	jobId?: string;
 	revisionNotes?: string;
 	customObject?: string;
 	lightExtractionText?: string;
@@ -634,6 +642,65 @@ export async function generateForPlaylist(
 			)
 			.run();
 
+		// 12d-ii. Record usage events for billing
+		const triggerSource =
+			options?.triggerType === "cron"
+				? ("cron" as const)
+				: options?.triggerType === "auto"
+					? ("auto_detect" as const)
+					: ("user" as const);
+
+		// LLM extraction events (one per pipeline run, aggregated tokens)
+		if (extractTokensIn > 0 || extractTokensOut > 0) {
+			await insertUsageEvent(env.DB, {
+				userId: playlist.user_id,
+				actionType: "llm_extraction",
+				model: LLM_MODEL,
+				costUsd: costBreakdown.steps[0].cost_usd,
+				generationId,
+				playlistId: playlist.id,
+				styleId: style.id,
+				jobId: options?.jobId,
+				tokensIn: extractTokensIn,
+				tokensOut: extractTokensOut,
+				modelUnitCost: MODEL_PRICING[LLM_MODEL]?.inputPerMillion,
+				triggerSource,
+			});
+		}
+
+		// LLM convergence event
+		if (convTokensIn > 0 || convTokensOut > 0) {
+			await insertUsageEvent(env.DB, {
+				userId: playlist.user_id,
+				actionType: "llm_convergence",
+				model: LLM_MODEL,
+				costUsd: costBreakdown.steps[1].cost_usd,
+				generationId,
+				playlistId: playlist.id,
+				styleId: style.id,
+				jobId: options?.jobId,
+				tokensIn: convTokensIn,
+				tokensOut: convTokensOut,
+				modelUnitCost: MODEL_PRICING[LLM_MODEL]?.inputPerMillion,
+				triggerSource,
+			});
+		}
+
+		// Image generation event
+		await insertUsageEvent(env.DB, {
+			userId: playlist.user_id,
+			actionType: "image_generation",
+			model: style.replicate_model,
+			costUsd: costBreakdown.steps[2].cost_usd,
+			generationId,
+			playlistId: playlist.id,
+			styleId: style.id,
+			jobId: options?.jobId,
+			durationMs: durationMs,
+			modelUnitCost: IMAGE_PRICING[style.replicate_model] ?? 0.04,
+			triggerSource,
+		});
+
 		// 12e. Update playlist tracking + clear progress
 		await env.DB.prepare(
 			`UPDATE playlists
@@ -725,6 +792,54 @@ export async function generateForPlaylist(
 					generationId,
 				)
 				.run();
+
+			// Record partial usage events for billing (even on failure)
+			const triggerSource =
+				options?.triggerType === "cron"
+					? ("cron" as const)
+					: options?.triggerType === "auto"
+						? ("auto_detect" as const)
+						: ("user" as const);
+
+			if (extractTokensIn > 0 || extractTokensOut > 0) {
+				await insertUsageEvent(env.DB, {
+					userId: playlist.user_id,
+					actionType: "llm_extraction",
+					model: LLM_MODEL,
+					costUsd: calculateLLMCost(
+						LLM_MODEL,
+						extractTokensIn,
+						extractTokensOut,
+					),
+					generationId,
+					playlistId: playlist.id,
+					styleId: style.id,
+					jobId: options?.jobId,
+					tokensIn: extractTokensIn,
+					tokensOut: extractTokensOut,
+					triggerSource,
+					status: "failed",
+					errorMessage: errorMessage.slice(0, 500),
+				});
+			}
+
+			if (convTokensIn > 0 || convTokensOut > 0) {
+				await insertUsageEvent(env.DB, {
+					userId: playlist.user_id,
+					actionType: "llm_convergence",
+					model: LLM_MODEL,
+					costUsd: calculateLLMCost(LLM_MODEL, convTokensIn, convTokensOut),
+					generationId,
+					playlistId: playlist.id,
+					styleId: style.id,
+					jobId: options?.jobId,
+					tokensIn: convTokensIn,
+					tokensOut: convTokensOut,
+					triggerSource,
+					status: "failed",
+					errorMessage: errorMessage.slice(0, 500),
+				});
+			}
 
 			await env.DB.prepare(
 				`UPDATE playlists SET status = 'failed', progress_data = NULL WHERE id = ?`,
