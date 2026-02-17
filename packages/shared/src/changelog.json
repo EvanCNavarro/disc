@@ -1,6 +1,42 @@
 {
 	"versions": [
 		{
+			"version": "0.9.0",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Two-step Schedule → Run workflow replaces single Generate button — stage playlists, configure, then trigger"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Per-item analysis mode: choose 'with lyrics analysis' (full pipeline) or 'without' (light extraction from your description)"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Column-contextual actions: Select All + Schedule on To Do, Run on Scheduled, Retry Failed on Done"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Collaborative and non-owned playlists shown as locked with 'Not included' badge — excluded from generation"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Playlist name now steers theme selection — cover art aligns with what the playlist name evokes"
+				},
+				{
+					"type": "feat",
+					"scope": "pipeline",
+					"message": "Light extraction mode: one LLM call derives object + aesthetic context from your text description"
+				}
+			]
+		},
+		{
 			"version": "0.8.11",
 			"date": "2026-02-16",
 			"entries": [
