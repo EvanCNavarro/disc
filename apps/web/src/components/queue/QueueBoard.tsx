@@ -7,7 +7,7 @@ import type {
 } from "@disc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ImageReviewModal } from "./ImageReviewModal";
-import { QueueCard } from "./QueueCard";
+import { QueueCard, type ScheduleConfig } from "./QueueCard";
 import { QueueColumn } from "./QueueColumn";
 import { StylePicker } from "./StylePicker";
 
@@ -51,19 +51,23 @@ export function QueueBoard() {
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 	const [styleOverride, setStyleOverride] = useState("");
 	const [loading, setLoading] = useState(true);
-	const [triggering, setTriggering] = useState(false);
+	const [spotifyId, setSpotifyId] = useState<string | null>(null);
+	const [scheduledItems, setScheduledItems] = useState<
+		Map<string, ScheduleConfig>
+	>(new Map());
 	const [modalPlaylistId, setModalPlaylistId] = useState<string | null>(null);
 	const [generations, setGenerations] = useState<GenerationVersion[]>([]);
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-	// Fetch playlists and styles
+	// Fetch playlists, styles, and session
 	const fetchData = useCallback(async () => {
 		try {
-			const [playlistsRes, stylesRes] = await Promise.all([
+			const [playlistsRes, stylesRes, sessionRes] = await Promise.all([
 				fetch("/api/playlists"),
 				fetch("/api/styles"),
+				fetch("/api/auth/session"),
 			]);
 
 			if (playlistsRes.ok) {
@@ -77,6 +81,15 @@ export function QueueBoard() {
 				const data = (await stylesRes.json()) as { styles: Style[] };
 				setStyles(data.styles);
 			}
+
+			if (sessionRes.ok) {
+				const session = (await sessionRes.json()) as {
+					user?: { spotifyId?: string };
+				};
+				if (session.user?.spotifyId) {
+					setSpotifyId(session.user.spotifyId);
+				}
+			}
 		} catch {
 			// Silently fail — will retry on next poll
 		} finally {
@@ -84,15 +97,42 @@ export function QueueBoard() {
 		}
 	}, []);
 
-	// Categorize playlists into 4 columns
-	const todo = playlists.filter((p) => p.status === "idle");
-	const scheduled = playlists.filter((p) => p.status === "queued");
-	const inProgress = playlists.filter((p) => p.status === "processing");
-	const done = playlists.filter(
-		(p) => p.status === "generated" || p.status === "failed",
+	// Eligibility check — locked if collaborative or not owned by user
+	const isEligible = useCallback(
+		(p: PlaylistWithImage) =>
+			!p.is_collaborative &&
+			(!p.owner_spotify_id || p.owner_spotify_id === spotifyId),
+		[spotifyId],
 	);
 
-	const hasProcessing = inProgress.length > 0 || scheduled.length > 0;
+	// Categorize playlists into 4 columns
+	const { todo, scheduled, inProgress, done } = useMemo(() => {
+		const todoArr: PlaylistWithImage[] = [];
+		const scheduledArr: PlaylistWithImage[] = [];
+		const inProgressArr: PlaylistWithImage[] = [];
+		const doneArr: PlaylistWithImage[] = [];
+
+		for (const p of playlists) {
+			if (scheduledItems.has(p.id)) {
+				scheduledArr.push(p);
+			} else if (p.status === "queued" || p.status === "processing") {
+				inProgressArr.push(p);
+			} else if (p.status === "generated" || p.status === "failed") {
+				doneArr.push(p);
+			} else {
+				todoArr.push(p);
+			}
+		}
+
+		return {
+			todo: todoArr,
+			scheduled: scheduledArr,
+			inProgress: inProgressArr,
+			done: doneArr,
+		};
+	}, [playlists, scheduledItems]);
+
+	const hasProcessing = inProgress.length > 0;
 	const isModalOpen = modalPlaylistId !== null;
 	const modalPlaylist = playlists.find((p) => p.id === modalPlaylistId);
 	const modalPlaylistProcessing = modalPlaylist?.status === "processing";
@@ -168,7 +208,10 @@ export function QueueBoard() {
 		});
 	}, []);
 
-	const selectableItems = useMemo(() => [...todo, ...done], [todo, done]);
+	const selectableItems = useMemo(
+		() => [...todo, ...done].filter((p) => isEligible(p)),
+		[todo, done, isEligible],
+	);
 
 	const selectAll = useCallback(() => {
 		setSelectedIds(new Set(selectableItems.map((p) => p.id)));
@@ -178,60 +221,115 @@ export function QueueBoard() {
 		setSelectedIds(new Set());
 	}, []);
 
-	// Batch trigger — optimistic UI: move items to Scheduled immediately
-	const handleBatchTrigger = useCallback(async () => {
-		if (selectedIds.size === 0) return;
+	// Schedule: move selected items into the Scheduled column
+	const handleSchedule = useCallback(() => {
+		setScheduledItems((prev) => {
+			const next = new Map(prev);
+			for (const id of selectedIds) {
+				if (!next.has(id)) {
+					next.set(id, { analysisMode: "with", customText: "" });
+				}
+			}
+			return next;
+		});
+		setSelectedIds(new Set());
+	}, [selectedIds]);
 
-		const idsToTrigger = Array.from(selectedIds);
+	// Run: send all scheduled items to the backend
+	const handleRun = useCallback(async () => {
+		if (scheduledItems.size === 0) return;
 
-		// Optimistic: immediately move selected playlists to "queued" status
+		const configs = Array.from(scheduledItems.entries()).map(
+			([id, config]) => ({
+				playlistId: id,
+				lightExtractionText:
+					config.analysisMode === "without" ? config.customText : undefined,
+			}),
+		);
+
+		const prevScheduled = new Map(scheduledItems);
+		setScheduledItems(new Map());
 		setPlaylists((prev) =>
 			prev.map((p) =>
-				idsToTrigger.includes(p.id) ? { ...p, status: "queued" } : p,
+				prevScheduled.has(p.id) ? { ...p, status: "queued" as const } : p,
 			),
 		);
-		setSelectedIds(new Set());
-		setTriggering(true);
 		setError(null);
 
-		// Scroll to top so user sees scheduled column
 		window.scrollTo({ top: 0, behavior: "smooth" });
 
 		try {
-			const response = await fetch("/api/playlists/generate-batch", {
+			const res = await fetch("/api/playlists/generate-batch", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					playlistIds: idsToTrigger,
+					playlistConfigs: configs,
 					styleId: styleOverride || undefined,
 				}),
 			});
-
-			if (response.ok) {
-				const data = (await response.json()) as {
-					failed: number;
-					succeeded: number;
-				};
-				if (data.failed > 0) {
-					setError(`${data.succeeded} triggered, ${data.failed} failed`);
-				}
-				await fetchData();
-			} else {
-				const data = (await response.json()) as { error?: string };
-				setError(data.error ?? "Batch trigger failed");
-				// Revert optimistic update on failure
-				await fetchData();
+			if (!res.ok) {
+				const data = (await res.json()) as { error?: string };
+				throw new Error(data.error ?? "Batch trigger failed");
 			}
-		} catch {
-			setError("Network error — could not reach server");
-			// Revert optimistic update on failure
 			await fetchData();
-		} finally {
-			setTriggering(false);
+		} catch (err) {
+			setError(err instanceof Error ? err.message : "Run failed");
+			setScheduledItems(prevScheduled);
+			setPlaylists((prev) =>
+				prev.map((p) =>
+					prevScheduled.has(p.id) ? { ...p, status: "idle" as const } : p,
+				),
+			);
 		}
-	}, [selectedIds, styleOverride, fetchData]);
+	}, [scheduledItems, styleOverride, fetchData]);
 
-	// Retry handler (from card)
+	// Unschedule a single item
+	const handleUnschedule = useCallback((playlistId: string) => {
+		setScheduledItems((prev) => {
+			const next = new Map(prev);
+			next.delete(playlistId);
+			return next;
+		});
+	}, []);
+
+	// Update config for a scheduled item
+	const handleConfigChange = useCallback(
+		(playlistId: string, config: Partial<ScheduleConfig>) => {
+			setScheduledItems((prev) => {
+				const next = new Map(prev);
+				const existing = next.get(playlistId);
+				if (existing) {
+					next.set(playlistId, { ...existing, ...config });
+				}
+				return next;
+			});
+		},
+		[],
+	);
+
+	// Can only run when all scheduled items have valid config
+	const canRun =
+		scheduledItems.size > 0 &&
+		Array.from(scheduledItems.values()).every(
+			(config) =>
+				config.analysisMode === "with" || config.customText.trim().length > 0,
+		);
+
+	// Retry all failed items — moves them to Scheduled
+	const handleRetryFailed = useCallback(() => {
+		const failedItems = done.filter((p) => p.status === "failed");
+		setScheduledItems((prev) => {
+			const next = new Map(prev);
+			for (const p of failedItems) {
+				if (!next.has(p.id)) {
+					next.set(p.id, { analysisMode: "with", customText: "" });
+				}
+			}
+			return next;
+		});
+	}, [done]);
+
+	// Retry handler (individual card in Done column)
 	const handleRetry = useCallback(
 		async (playlistId: string) => {
 			const playlist = playlists.find((p) => p.id === playlistId);
@@ -310,7 +408,7 @@ export function QueueBoard() {
 				aria-label="Loading queue"
 				className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none"
 			>
-				<span className="sr-only">Loading queue data…</span>
+				<span className="sr-only">Loading queue data...</span>
 				{[1, 2, 3, 4].map((i) => (
 					<div
 						key={i}
@@ -327,61 +425,24 @@ export function QueueBoard() {
 	}
 
 	const hasSelection = selectedIds.size > 0;
+	const failedCount = done.filter((p) => p.status === "failed").length;
 
 	return (
 		<section
 			aria-label="Generation queue"
 			className="flex flex-col gap-[var(--space-md)]"
 		>
-			{/* Sticky action header — sticks below navbar when scrolling */}
+			{/* Sticky action header — style picker + playlist count */}
 			<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
-				{/* Selection count */}
 				<span className="text-sm font-medium text-[var(--color-text-secondary)]">
-					{hasSelection
-						? `${selectedIds.size} selected`
-						: `${playlists.length} playlists`}
+					{playlists.length} playlists
 				</span>
-
-				{/* Spacer */}
 				<div className="flex-1" />
-
-				{/* Style picker */}
 				<StylePicker
 					styles={styles}
 					value={styleOverride}
 					onChange={setStyleOverride}
 				/>
-
-				{/* Select / Deselect */}
-				{hasSelection ? (
-					<button
-						type="button"
-						onClick={clearSelection}
-						className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
-					>
-						Deselect
-					</button>
-				) : (
-					<button
-						type="button"
-						onClick={selectAll}
-						className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
-					>
-						Select All
-					</button>
-				)}
-
-				{/* Generate button */}
-				<button
-					type="button"
-					onClick={handleBatchTrigger}
-					disabled={!hasSelection || triggering}
-					className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-40 disabled:cursor-not-allowed"
-				>
-					{triggering
-						? "Triggering..."
-						: `Generate${hasSelection ? ` (${selectedIds.size})` : ""}`}
-				</button>
 			</div>
 
 			{/* Error banner */}
@@ -403,8 +464,32 @@ export function QueueBoard() {
 
 			{/* Kanban grid */}
 			<div className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none">
+				{/* To Do column */}
 				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn title="To Do" count={todo.length} variant="todo">
+					<QueueColumn
+						title="To Do"
+						count={todo.length}
+						variant="todo"
+						actions={
+							<>
+								<button
+									type="button"
+									onClick={hasSelection ? clearSelection : selectAll}
+									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+								>
+									{hasSelection ? "Deselect" : "Select All"}
+								</button>
+								<button
+									type="button"
+									onClick={handleSchedule}
+									disabled={selectedIds.size === 0}
+									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
+								>
+									Schedule
+								</button>
+							</>
+						}
+					>
 						{todo.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
 								No playlists pending
@@ -419,19 +504,32 @@ export function QueueBoard() {
 									coverUrl={p.spotify_cover_url}
 									progressData={p.progress_data}
 									lastGeneratedAt={p.last_generated_at}
+									locked={!isEligible(p)}
 									selected={selectedIds.has(p.id)}
-									onSelect={toggleSelect}
+									onSelect={isEligible(p) ? toggleSelect : undefined}
 								/>
 							))
 						)}
 					</QueueColumn>
 				</div>
 
+				{/* Scheduled column */}
 				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn
 						title="Scheduled"
 						count={scheduled.length}
 						variant="scheduled"
+						actions={
+							<button
+								type="button"
+								onClick={handleRun}
+								disabled={!canRun}
+								className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors disabled:opacity-40"
+							>
+								Run
+								{scheduledItems.size > 0 ? ` (${scheduledItems.size})` : ""}
+							</button>
+						}
 					>
 						{scheduled.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
@@ -447,12 +545,16 @@ export function QueueBoard() {
 									coverUrl={p.spotify_cover_url}
 									progressData={p.progress_data}
 									lastGeneratedAt={p.last_generated_at}
+									scheduleConfig={scheduledItems.get(p.id)}
+									onConfigChange={(config) => handleConfigChange(p.id, config)}
+									onUnschedule={() => handleUnschedule(p.id)}
 								/>
 							))
 						)}
 					</QueueColumn>
 				</div>
 
+				{/* In Progress column */}
 				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
 					<QueueColumn
 						title="In Progress"
@@ -484,8 +586,35 @@ export function QueueBoard() {
 					</QueueColumn>
 				</div>
 
+				{/* Done column */}
 				<div className="min-w-[80vw] shrink-0 snap-center md:min-w-0 md:shrink">
-					<QueueColumn title="Done" count={done.length} variant="done">
+					<QueueColumn
+						title="Done"
+						count={done.length}
+						variant="done"
+						actions={
+							<>
+								<button
+									type="button"
+									onClick={() => {
+										const doneSelectable = done.filter((p) => isEligible(p));
+										setSelectedIds(new Set(doneSelectable.map((p) => p.id)));
+									}}
+									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+								>
+									Select All
+								</button>
+								<button
+									type="button"
+									onClick={handleRetryFailed}
+									disabled={failedCount === 0}
+									className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive-muted)] transition-colors disabled:opacity-40"
+								>
+									Retry Failed
+								</button>
+							</>
+						}
+					>
 						{done.length === 0 ? (
 							<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
 								No completed generations
@@ -504,8 +633,9 @@ export function QueueBoard() {
 									}
 									progressData={p.progress_data}
 									lastGeneratedAt={p.last_generated_at}
+									locked={!isEligible(p)}
 									selected={selectedIds.has(p.id)}
-									onSelect={toggleSelect}
+									onSelect={isEligible(p) ? toggleSelect : undefined}
 									onViewImage={
 										p.status === "generated" ? setModalPlaylistId : undefined
 									}

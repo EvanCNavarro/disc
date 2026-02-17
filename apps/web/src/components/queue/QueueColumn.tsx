@@ -6,6 +6,7 @@ interface QueueColumnProps {
 	title: string;
 	count: number;
 	variant: "todo" | "scheduled" | "progress" | "done";
+	actions?: React.ReactNode;
 	children: React.ReactNode;
 }
 
@@ -27,6 +28,7 @@ export function QueueColumn({
 	title,
 	count,
 	variant,
+	actions,
 	children,
 }: QueueColumnProps) {
 	const headingId = useId();
@@ -36,18 +38,25 @@ export function QueueColumn({
 			aria-labelledby={headingId}
 			className="flex flex-col gap-[var(--space-sm)] min-w-0"
 		>
-			<div className="flex items-center gap-[var(--space-sm)] px-1">
-				<h3
-					id={headingId}
-					className="text-base font-semibold text-[var(--color-text-secondary)]"
-				>
-					{title}
-				</h3>
-				<span
-					className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-sm font-medium ${badgeColors[variant]}`}
-				>
-					{count}
-				</span>
+			<div className="flex items-center justify-between px-1">
+				<div className="flex items-center gap-[var(--space-sm)]">
+					<h3
+						id={headingId}
+						className="text-base font-semibold text-[var(--color-text-secondary)]"
+					>
+						{title}
+					</h3>
+					<span
+						className={`rounded-[var(--radius-pill)] px-2 py-0.5 text-sm font-medium ${badgeColors[variant]}`}
+					>
+						{count}
+					</span>
+				</div>
+				{actions && (
+					<div className="flex items-center gap-[var(--space-xs)]">
+						{actions}
+					</div>
+				)}
 			</div>
 			<div
 				className={`flex flex-col gap-[var(--space-sm)] rounded-[var(--radius-lg)] p-[var(--space-sm)] ${variantColors[variant]}`}

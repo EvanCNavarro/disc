@@ -4,6 +4,11 @@ import type { PipelineProgress, PipelineStepName } from "@disc/shared";
 import Image from "next/image";
 import { formatRelative } from "@/lib/format";
 
+export interface ScheduleConfig {
+	analysisMode: "with" | "without";
+	customText: string;
+}
+
 const STEP_LABELS: Record<PipelineStepName, string> = {
 	fetch_tracks: "Fetching tracks",
 	fetch_lyrics: "Fetching lyrics",
@@ -30,7 +35,11 @@ interface QueueCardProps {
 	progressData: string | null;
 	lastGeneratedAt: string | null;
 	selected?: boolean;
+	locked?: boolean;
+	scheduleConfig?: ScheduleConfig;
 	onSelect?: (id: string) => void;
+	onConfigChange?: (config: Partial<ScheduleConfig>) => void;
+	onUnschedule?: () => void;
 	onViewImage?: (id: string) => void;
 	onViewDetails?: (id: string) => void;
 	onRetry?: (id: string) => void;
@@ -44,7 +53,11 @@ export function QueueCard({
 	progressData,
 	lastGeneratedAt,
 	selected,
+	locked,
+	scheduleConfig,
 	onSelect,
+	onConfigChange,
+	onUnschedule,
 	onViewImage,
 	onViewDetails,
 	onRetry,
@@ -74,20 +87,41 @@ export function QueueCard({
 		stepIndex >= 0 ? ((stepIndex + 1) / STEP_ORDER.length) * 100 : 0;
 
 	const isSelectable =
-		status === "idle" ||
-		status === "queued" ||
-		status === "generated" ||
-		status === "failed";
+		!locked &&
+		(status === "idle" ||
+			status === "queued" ||
+			status === "generated" ||
+			status === "failed");
 
 	return (
 		<div
-			className={`glass rounded-[var(--radius-md)] p-[var(--space-md)] transition-all duration-[var(--duration-fast)] ${
-				selected ? "ring-2 ring-[var(--color-accent)]" : ""
-			}`}
+			className={[
+				"glass rounded-[var(--radius-md)] p-[var(--space-md)] transition-all duration-[var(--duration-fast)]",
+				selected ? "ring-2 ring-[var(--color-accent)]" : "",
+				locked ? "opacity-50" : "",
+			].join(" ")}
 		>
 			<div className="flex items-center gap-[var(--space-md)]">
 				{/* Selection / status indicator */}
-				{isSelectable && onSelect ? (
+				{locked ? (
+					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border border-[var(--color-border)] bg-[var(--color-surface)]">
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 14 14"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6M3.5 6h7a1 1 0 0 1 1 1v4.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
+								stroke="var(--color-text-faint)"
+								strokeWidth="1.2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+							/>
+						</svg>
+					</span>
+				) : isSelectable && onSelect ? (
 					<button
 						type="button"
 						onClick={() => onSelect(id)}
@@ -112,7 +146,7 @@ export function QueueCard({
 							</svg>
 						)}
 					</button>
-				) : status === "queued" ? (
+				) : status === "queued" && !scheduleConfig ? (
 					<span
 						role="img"
 						className="flex h-6 w-6 shrink-0 items-center justify-center text-[var(--color-warning)]"
@@ -164,7 +198,13 @@ export function QueueCard({
 				{/* Name + status */}
 				<div className="min-w-0 flex-1">
 					<p className="truncate text-sm font-semibold">{name}</p>
-					{status === "queued" ? (
+					{locked ? (
+						<span className="inline-block rounded-[var(--radius-pill)] bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-faint)]">
+							Not included
+						</span>
+					) : scheduleConfig ? (
+						<p className="text-sm text-[var(--color-warning)]">Scheduled</p>
+					) : status === "queued" ? (
 						<p className="text-sm text-[var(--color-warning)]">Scheduled</p>
 					) : status === "processing" && progress ? (
 						<p className="text-sm text-[var(--color-info)]">
@@ -189,36 +229,79 @@ export function QueueCard({
 				</div>
 
 				{/* Actions */}
-				<div className="flex shrink-0 gap-[var(--space-xs)]">
-					{status === "processing" && onViewDetails && (
-						<button
-							type="button"
-							onClick={() => onViewDetails(id)}
-							className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-info)] hover:bg-[var(--color-info)]/10 transition-colors"
-						>
-							Details
-						</button>
-					)}
-					{status === "generated" && onViewImage && (
-						<button
-							type="button"
-							onClick={() => onViewImage(id)}
-							className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors"
-						>
-							View
-						</button>
-					)}
-					{status === "failed" && onRetry && (
-						<button
-							type="button"
-							onClick={() => onRetry(id)}
-							className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive-muted)] transition-colors"
-						>
-							Retry
-						</button>
-					)}
-				</div>
+				{!locked && (
+					<div className="flex shrink-0 gap-[var(--space-xs)]">
+						{status === "processing" && onViewDetails && (
+							<button
+								type="button"
+								onClick={() => onViewDetails(id)}
+								className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-info)] hover:bg-[var(--color-info)]/10 transition-colors"
+							>
+								Details
+							</button>
+						)}
+						{status === "generated" && onViewImage && (
+							<button
+								type="button"
+								onClick={() => onViewImage(id)}
+								className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-accent)] hover:bg-[var(--color-accent-muted)] transition-colors"
+							>
+								View
+							</button>
+						)}
+						{status === "failed" && onRetry && (
+							<button
+								type="button"
+								onClick={() => onRetry(id)}
+								className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-destructive)] hover:bg-[var(--color-destructive-muted)] transition-colors"
+							>
+								Retry
+							</button>
+						)}
+					</div>
+				)}
 			</div>
+
+			{/* Schedule config (for Scheduled column items) */}
+			{scheduleConfig && (
+				<div className="flex flex-col gap-[var(--space-xs)] mt-[var(--space-xs)] border-t border-[var(--color-border)] pt-[var(--space-xs)]">
+					<select
+						value={scheduleConfig.analysisMode}
+						onChange={(e) =>
+							onConfigChange?.({
+								analysisMode: e.target.value as "with" | "without",
+							})
+						}
+						className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)]"
+					>
+						<option value="with">With lyrics analysis</option>
+						<option value="without">Without lyrics analysis</option>
+					</select>
+
+					{scheduleConfig.analysisMode === "without" && (
+						<input
+							type="text"
+							value={scheduleConfig.customText}
+							onChange={(e) => onConfigChange?.({ customText: e.target.value })}
+							placeholder="Describe the subject and mood..."
+							className={[
+								"rounded-[var(--radius-md)] border bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-faint)]",
+								!scheduleConfig.customText.trim()
+									? "border-[var(--color-destructive)]"
+									: "border-[var(--color-border)]",
+							].join(" ")}
+						/>
+					)}
+
+					<button
+						type="button"
+						onClick={onUnschedule}
+						className="text-[10px] text-[var(--color-text-faint)] hover:text-[var(--color-text-muted)] self-start"
+					>
+						Remove
+					</button>
+				</div>
+			)}
 
 			{/* Progress bar */}
 			{status === "processing" && (
