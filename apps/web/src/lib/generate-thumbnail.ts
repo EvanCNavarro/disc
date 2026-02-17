@@ -109,8 +109,11 @@ export async function generateThumbnail(
 
 	let prediction = (await predResp.json()) as ReplicatePrediction;
 
-	// Poll if not yet complete
+	// Poll if not yet complete (with error tolerance)
 	const deadline = Date.now() + CONFIG.REPLICATE_TIMEOUT_MS;
+	let consecutiveErrors = 0;
+	const MAX_POLL_ERRORS = 3;
+
 	while (
 		prediction.status !== "succeeded" &&
 		prediction.status !== "failed" &&
@@ -122,7 +125,17 @@ export async function generateThumbnail(
 			`${REPLICATE_API_BASE}/predictions/${prediction.id}`,
 			{ headers: { Authorization: `Bearer ${apiToken}` } },
 		);
-		if (!pollResp.ok) break;
+
+		if (!pollResp.ok) {
+			consecutiveErrors++;
+			console.warn(
+				`[Thumbnail] Poll error ${consecutiveErrors}/${MAX_POLL_ERRORS}: ${pollResp.status}`,
+			);
+			if (consecutiveErrors >= MAX_POLL_ERRORS) break;
+			continue;
+		}
+
+		consecutiveErrors = 0;
 		prediction = (await pollResp.json()) as ReplicatePrediction;
 	}
 

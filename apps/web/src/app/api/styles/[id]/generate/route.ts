@@ -1,5 +1,8 @@
+import type { DbStyle } from "@disc/shared";
+import { CONFIG } from "@disc/shared";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { queryD1 } from "@/lib/db";
 
 const REPLICATE_API_BASE = "https://api.replicate.com/v1";
 
@@ -10,7 +13,11 @@ interface ReplicatePrediction {
 	error: string | null;
 }
 
-/** POST /api/styles/[id]/generate -- triggers 4 parallel Replicate generations */
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = CONFIG.REPLICATE_TIMEOUT_MS;
+const MAX_POLL_ERRORS = 3;
+
+/** POST /api/styles/[id]/generate -- triggers 4 parallel Replicate generations using the style's own model config */
 export async function POST(
 	request: Request,
 	{ params }: { params: Promise<{ id: string }> },
@@ -21,7 +28,6 @@ export async function POST(
 	}
 
 	const { id } = await params;
-	void id; // style ID reserved for future per-style model config
 
 	const body = (await request.json()) as {
 		prompt: string;
@@ -44,14 +50,23 @@ export async function POST(
 		);
 	}
 
+	// Fetch style config from D1
+	const styles = await queryD1<DbStyle>("SELECT * FROM styles WHERE id = ?", [
+		id,
+	]);
+	if (styles.length === 0) {
+		return NextResponse.json({ error: "Style not found" }, { status: 404 });
+	}
+	const style = styles[0];
+
 	// Resolve model version once (shared across all 4 predictions)
 	const modelResp = await fetch(
-		`${REPLICATE_API_BASE}/models/black-forest-labs/flux-dev`,
+		`${REPLICATE_API_BASE}/models/${style.replicate_model}`,
 		{ headers: { Authorization: `Bearer ${REPLICATE_TOKEN}` } },
 	);
 	if (!modelResp.ok) {
 		return NextResponse.json(
-			{ error: "Failed to resolve model version" },
+			{ error: `Failed to resolve model version (${modelResp.status})` },
 			{ status: 502 },
 		);
 	}
@@ -66,10 +81,36 @@ export async function POST(
 		);
 	}
 
+	// Build input using the style's model params
+	const isFlux2 = style.replicate_model.includes("flux-2-");
+
 	// Generate all images in parallel
 	const results = await Promise.allSettled(
 		subjects.map(async (subject: string) => {
 			const fullPrompt = prompt.replace("{subject}", subject);
+
+			const input: Record<string, unknown> = {
+				prompt: fullPrompt,
+				aspect_ratio: "1:1",
+				output_format: "png",
+				guidance: style.guidance_scale,
+				...(isFlux2
+					? { steps: style.num_inference_steps }
+					: { num_inference_steps: style.num_inference_steps }),
+			};
+
+			if (style.lora_url) {
+				input.hf_lora = style.lora_url;
+				input.lora_scale = style.lora_scale;
+			}
+
+			if (style.negative_prompt) {
+				input.negative_prompt = style.negative_prompt;
+			}
+
+			if (style.seed !== null) {
+				input.seed = style.seed;
+			}
 
 			// Create prediction with Prefer: wait (blocks up to 60s)
 			const predResp = await fetch(`${REPLICATE_API_BASE}/predictions`, {
@@ -79,16 +120,7 @@ export async function POST(
 					"Content-Type": "application/json",
 					Prefer: "wait",
 				},
-				body: JSON.stringify({
-					version,
-					input: {
-						prompt: fullPrompt,
-						aspect_ratio: "1:1",
-						output_format: "png",
-						guidance: 3.5,
-						num_inference_steps: 28,
-					},
-				}),
+				body: JSON.stringify({ version, input }),
 				signal: AbortSignal.timeout(120_000),
 			});
 
@@ -99,13 +131,17 @@ export async function POST(
 
 			let prediction = (await predResp.json()) as ReplicatePrediction;
 
-			// Poll if not yet complete
+			// Poll if not yet complete (with timeout + error tolerance)
+			const deadline = Date.now() + POLL_TIMEOUT_MS;
+			let consecutiveErrors = 0;
+
 			while (
 				prediction.status !== "succeeded" &&
 				prediction.status !== "failed" &&
-				prediction.status !== "canceled"
+				prediction.status !== "canceled" &&
+				Date.now() < deadline
 			) {
-				await new Promise((r) => setTimeout(r, 2000));
+				await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
 				const pollResp = await fetch(
 					`${REPLICATE_API_BASE}/predictions/${prediction.id}`,
 					{
@@ -114,11 +150,27 @@ export async function POST(
 						},
 					},
 				);
+
+				if (!pollResp.ok) {
+					consecutiveErrors++;
+					if (consecutiveErrors >= MAX_POLL_ERRORS) {
+						throw new Error(
+							`Poll failed ${MAX_POLL_ERRORS} times (last: ${pollResp.status})`,
+						);
+					}
+					continue;
+				}
+
+				consecutiveErrors = 0;
 				prediction = (await pollResp.json()) as ReplicatePrediction;
 			}
 
 			if (prediction.status === "failed") {
 				throw new Error(prediction.error ?? "Prediction failed");
+			}
+
+			if (prediction.status !== "succeeded") {
+				throw new Error(`Prediction timed out (status: ${prediction.status})`);
 			}
 
 			const url = Array.isArray(prediction.output)
