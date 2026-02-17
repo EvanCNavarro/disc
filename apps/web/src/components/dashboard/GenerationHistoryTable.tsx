@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useQueue } from "@/context/QueueContext";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatCost, formatDuration, formatTimestamp } from "@/lib/format";
 
@@ -68,10 +69,21 @@ function shortenModel(model: string): string {
 }
 
 export function GenerationHistoryTable() {
-	const { data, loading } = useCachedFetch<{ generations: GenerationRow[] }>(
-		"/api/generations",
-	);
+	const { data, loading, refresh } = useCachedFetch<{
+		generations: GenerationRow[];
+	}>("/api/generations");
 	const generations = data?.generations ?? [];
+
+	const { status: queueStatus } = useQueue();
+	const prevCompletedRef = useRef(0);
+
+	useEffect(() => {
+		const completed = queueStatus?.activeJob?.completedCount ?? 0;
+		if (completed > prevCompletedRef.current && completed > 0) {
+			refresh();
+		}
+		prevCompletedRef.current = completed;
+	}, [queueStatus?.activeJob?.completedCount, refresh]);
 	const [expandedId, setExpandedId] = useState<string | null>(null);
 	const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
 	const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>("all");
