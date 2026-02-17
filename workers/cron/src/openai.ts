@@ -5,6 +5,9 @@
  * Uses JSON response format for structured output.
  */
 
+import { CONFIG } from "@disc/shared";
+import { withRetry } from "./retry";
+
 interface ChatCompletionOptions {
 	temperature?: number;
 	maxTokens?: number;
@@ -16,10 +19,7 @@ interface ChatCompletionResult<T> {
 	outputTokens: number;
 }
 
-/**
- * Calls GPT-4o-mini with JSON response format and parses the result.
- */
-export async function chatCompletionJSON<T>(
+async function fetchCompletion<T>(
 	apiKey: string,
 	systemPrompt: string,
 	userPrompt: string,
@@ -89,4 +89,29 @@ export async function chatCompletionJSON<T>(
 		inputTokens: data.usage.prompt_tokens,
 		outputTokens: data.usage.completion_tokens,
 	};
+}
+
+/**
+ * Calls GPT-4o-mini with JSON response format and parses the result.
+ * Retries on transient errors (429, 5xx, timeouts).
+ */
+export async function chatCompletionJSON<T>(
+	apiKey: string,
+	systemPrompt: string,
+	userPrompt: string,
+	options?: ChatCompletionOptions,
+): Promise<ChatCompletionResult<T>> {
+	return withRetry(
+		() => fetchCompletion<T>(apiKey, systemPrompt, userPrompt, options),
+		{
+			maxAttempts: CONFIG.OPENAI_RETRY_ATTEMPTS,
+			baseDelayMs: 2000,
+			onRetry: (attempt, error, delayMs) => {
+				console.warn(
+					`[OpenAI] Retry ${attempt}/${CONFIG.OPENAI_RETRY_ATTEMPTS} after ${Math.round(delayMs)}ms:`,
+					error instanceof Error ? error.message : error,
+				);
+			},
+		},
+	);
 }

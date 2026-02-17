@@ -1,6 +1,7 @@
 "use client";
 
 import type { QueueNextCron } from "@disc/shared";
+import { APLOTOCA } from "@disc/shared";
 import { formatLocalTime } from "@/lib/timezone";
 
 interface CronIdleBannerProps {
@@ -44,9 +45,14 @@ export function CronIdleBanner({ nextCron }: CronIdleBannerProps) {
 				{localTimeStr}
 			</span>
 
-			<span className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
-				{nextCron.style.name}
-			</span>
+			<div className="flex items-center gap-[var(--space-sm)]">
+				<span className="rounded-[var(--radius-pill)] bg-[var(--color-accent)]/10 px-2.5 py-1 text-xs font-semibold text-[var(--color-accent)]">
+					{APLOTOCA.acronym}
+				</span>
+				<span className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
+					{nextCron.style.name}
+				</span>
+			</div>
 		</div>
 	);
 }

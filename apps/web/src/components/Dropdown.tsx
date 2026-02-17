@@ -178,7 +178,7 @@ export function Dropdown({
 				aria-controls={open ? listboxId : undefined}
 				aria-labelledby={label ? labelId : undefined}
 				onClick={() => setOpen((prev) => !prev)}
-				className={`flex items-center gap-2 rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium transition-colors ${
+				className={`flex w-full min-w-0 items-center gap-2 rounded-[var(--radius-md)] border px-3 py-1.5 text-sm font-medium transition-colors ${
 					open
 						? "border-[var(--color-accent)] text-[var(--color-text)]"
 						: "border-[var(--color-border)] text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-text)]"

@@ -51,46 +51,11 @@ export const authConfig = {
 				token.displayName = profile?.display_name as string;
 			}
 
-			// Token refresh: Spotify access tokens expire in 1 hour
-			if (token.expiresAt && Date.now() / 1000 > token.expiresAt) {
-				try {
-					const response = await fetch(
-						"https://accounts.spotify.com/api/token",
-						{
-							method: "POST",
-							headers: {
-								"Content-Type": "application/x-www-form-urlencoded",
-								Authorization: `Basic ${Buffer.from(
-									`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
-								).toString("base64")}`,
-							},
-							body: new URLSearchParams({
-								grant_type: "refresh_token",
-								refresh_token: token.refreshToken ?? "",
-							}),
-						},
-					);
-
-					if (!response.ok) {
-						throw new Error(`Token refresh failed: ${response.status}`);
-					}
-
-					const data = (await response.json()) as {
-						access_token: string;
-						expires_in: number;
-						refresh_token?: string;
-					};
-
-					token.accessToken = data.access_token;
-					token.expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
-
-					if (data.refresh_token) {
-						token.refreshToken = data.refresh_token;
-					}
-				} catch {
-					token.error = "RefreshTokenError";
-				}
-			}
+			// Token refresh is handled ONLY in fullAuthConfig (auth.ts) which
+			// can persist rotated refresh tokens to D1. Middleware uses this
+			// edge-safe config and must NOT refresh tokens — doing so would
+			// rotate the Spotify refresh token without updating D1, breaking
+			// the cron worker's stored token.
 
 			return token;
 		},

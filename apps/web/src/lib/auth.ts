@@ -21,34 +21,76 @@ export const fullAuthConfig = {
 				NonNullable<NonNullable<NextAuthConfig["callbacks"]>["jwt"]>
 			>[0],
 		) {
-			const previousRefreshToken = (params.token as Record<string, unknown>)
-				.refreshToken as string | undefined;
-
-			// Delegate to base callback (handles sign-in capture + Spotify token refresh)
+			// Delegate to base callback (handles sign-in capture only)
 			const token = (await authConfig.callbacks.jwt?.(params)) as Record<
 				string,
 				unknown
 			>;
 
-			// If refresh token was rotated, persist to D1 so the cron worker stays current
-			if (
-				token.refreshToken &&
-				token.refreshToken !== previousRefreshToken &&
-				token.spotifyId
-			) {
+			// Token refresh: Spotify access tokens expire in 1 hour.
+			// This MUST run server-side (not in middleware) so rotated
+			// refresh tokens get persisted to D1 for the cron worker.
+			if (token.expiresAt && Date.now() / 1000 > (token.expiresAt as number)) {
+				const previousRefreshToken = token.refreshToken as string | undefined;
+
 				try {
-					const encryptionKey = getEncryptionKey();
-					const encryptedToken = encrypt(
-						token.refreshToken as string,
-						encryptionKey,
+					const response = await fetch(
+						"https://accounts.spotify.com/api/token",
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/x-www-form-urlencoded",
+								Authorization: `Basic ${Buffer.from(
+									`${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
+								).toString("base64")}`,
+							},
+							body: new URLSearchParams({
+								grant_type: "refresh_token",
+								refresh_token: (token.refreshToken as string) ?? "",
+							}),
+						},
 					);
-					await queryD1(
-						"UPDATE users SET encrypted_refresh_token = ?, updated_at = datetime('now') WHERE spotify_user_id = ?",
-						[encryptedToken, token.spotifyId],
-					);
-					console.log("[Auth] Rotated refresh token persisted to D1");
-				} catch (error) {
-					console.error("[Auth] Failed to persist rotated token:", error);
+
+					if (!response.ok) {
+						throw new Error(`Token refresh failed: ${response.status}`);
+					}
+
+					const data = (await response.json()) as {
+						access_token: string;
+						expires_in: number;
+						refresh_token?: string;
+					};
+
+					token.accessToken = data.access_token;
+					token.expiresAt = Math.floor(Date.now() / 1000) + data.expires_in;
+
+					if (data.refresh_token) {
+						token.refreshToken = data.refresh_token;
+					}
+
+					// Persist rotated refresh token to D1 for cron worker
+					if (
+						token.refreshToken &&
+						token.refreshToken !== previousRefreshToken &&
+						token.spotifyId
+					) {
+						try {
+							const encryptionKey = getEncryptionKey();
+							const encryptedToken = encrypt(
+								token.refreshToken as string,
+								encryptionKey,
+							);
+							await queryD1(
+								"UPDATE users SET encrypted_refresh_token = ?, updated_at = datetime('now') WHERE spotify_user_id = ?",
+								[encryptedToken, token.spotifyId],
+							);
+							console.log("[Auth] Rotated refresh token persisted to D1");
+						} catch (error) {
+							console.error("[Auth] Failed to persist rotated token:", error);
+						}
+					}
+				} catch {
+					token.error = "RefreshTokenError";
 				}
 			}
 

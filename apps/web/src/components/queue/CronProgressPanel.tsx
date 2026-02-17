@@ -82,7 +82,12 @@ function MiniCard({
 					</div>
 				)}
 				{playlist.status === "failed" && (
-					<p className="text-xs text-[var(--color-destructive)]">Failed</p>
+					<p
+						className="text-xs text-[var(--color-destructive)] truncate"
+						title={playlist.errorMessage ?? undefined}
+					>
+						{playlist.errorMessage || "Failed"}
+					</p>
 				)}
 				{playlist.status === "pending" && (
 					<p className="text-xs text-[var(--color-text-muted)]">Waiting...</p>

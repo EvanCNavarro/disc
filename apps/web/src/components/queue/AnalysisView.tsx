@@ -169,60 +169,62 @@ export function AnalysisView({ generations }: AnalysisViewProps) {
 						</div>
 					</CollapsibleSection>
 
-					{/* Theme Selection (Convergence) */}
-					<CollapsibleSection
-						title="Theme Selection"
-						subtitle={`Selected: ${analysis.chosenObject}`}
-						collapsed={collapsed.convergence}
-						onToggle={() => toggleSection("convergence")}
-					>
-						<div className="space-y-2">
-							{analysis.convergenceResult.candidates.map((candidate, i) => {
-								const isSelected =
-									i === analysis.convergenceResult.selectedIndex;
-								return (
-									<div
-										key={candidate.object}
-										className={[
-											"rounded-[var(--radius-sm)] border p-2",
-											isSelected
-												? "border-[var(--color-accent)] bg-[var(--color-accent)]/5"
-												: "border-[var(--color-border)] bg-[var(--color-bg)]",
-										].join(" ")}
-									>
-										<div className="flex items-center gap-1.5">
-											<span
-												className={`text-xs font-medium ${isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text)]"}`}
-											>
-												#{candidate.rank} {candidate.object}
-											</span>
-											{isSelected && (
-												<span className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-1.5 py-0.5 text-[9px] font-medium text-white">
-													SELECTED
+					{/* Theme Selection (Convergence) — only rendered for full APLOTOCA runs */}
+					{analysis.convergenceResult && (
+						<CollapsibleSection
+							title="Theme Selection"
+							subtitle={`Selected: ${analysis.chosenObject}`}
+							collapsed={collapsed.convergence}
+							onToggle={() => toggleSection("convergence")}
+						>
+							<div className="space-y-2">
+								{analysis.convergenceResult.candidates.map((candidate, i) => {
+									const isSelected =
+										i === analysis.convergenceResult?.selectedIndex;
+									return (
+										<div
+											key={candidate.object}
+											className={[
+												"rounded-[var(--radius-sm)] border p-2",
+												isSelected
+													? "border-[var(--color-accent)] bg-[var(--color-accent)]/5"
+													: "border-[var(--color-border)] bg-[var(--color-bg)]",
+											].join(" ")}
+										>
+											<div className="flex items-center gap-1.5">
+												<span
+													className={`text-xs font-medium ${isSelected ? "text-[var(--color-accent)]" : "text-[var(--color-text)]"}`}
+												>
+													#{candidate.rank} {candidate.object}
 												</span>
-											)}
+												{isSelected && (
+													<span className="rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-1.5 py-0.5 text-[9px] font-medium text-white">
+														SELECTED
+													</span>
+												)}
+											</div>
+											<p className="mt-1 text-[10px] text-[var(--color-text-muted)] leading-relaxed">
+												{candidate.aestheticContext}
+											</p>
+											<p className="mt-0.5 text-[10px] text-[var(--color-text-faint)] italic">
+												{candidate.reasoning}
+											</p>
 										</div>
-										<p className="mt-1 text-[10px] text-[var(--color-text-muted)] leading-relaxed">
-											{candidate.aestheticContext}
-										</p>
-										<p className="mt-0.5 text-[10px] text-[var(--color-text-faint)] italic">
-											{candidate.reasoning}
+									);
+								})}
+								{analysis.convergenceResult.collisionNotes && (
+									<div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
+										<span className="text-[10px] font-medium text-[var(--color-text-secondary)]">
+											Collision notes:
+										</span>
+										<p className="mt-0.5 text-[10px] text-[var(--color-text-muted)] italic">
+											{analysis.convergenceResult.collisionNotes}
 										</p>
 									</div>
-								);
-							})}
-							{analysis.convergenceResult.collisionNotes && (
-								<div className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2">
-									<span className="text-[10px] font-medium text-[var(--color-text-secondary)]">
-										Collision notes:
-									</span>
-									<p className="mt-0.5 text-[10px] text-[var(--color-text-muted)] italic">
-										{analysis.convergenceResult.collisionNotes}
-									</p>
-								</div>
-							)}
-						</div>
-					</CollapsibleSection>
+								)}
+							</div>
+						</CollapsibleSection>
+					)}
 
 					{/* Image Prompt */}
 					<CollapsibleSection

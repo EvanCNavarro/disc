@@ -291,7 +291,10 @@ function GenerationCard({
 	playlistName: string;
 }) {
 	const [promptOpen, setPromptOpen] = useState(false);
-	const imageUrl = `/api/images?key=${encodeURIComponent(generation.r2_key)}`;
+	const isFailed = generation.status === "failed";
+	const imageUrl = generation.r2_key
+		? `/api/images?key=${encodeURIComponent(generation.r2_key)}`
+		: null;
 
 	return (
 		<div
@@ -300,27 +303,61 @@ function GenerationCard({
 		>
 			{/* Label */}
 			<span className="text-xs font-medium text-[var(--color-text-muted)] truncate">
-				{isNewest ? "Current" : generation.style_name}
+				{isFailed ? "Failed" : isNewest ? "Current" : generation.style_name}
 			</span>
 
-			{/* Image */}
+			{/* Image or error placeholder */}
 			<div
 				className={
-					isNewest
+					isNewest && !isFailed
 						? "ring-2 ring-[var(--color-accent)] rounded-[var(--radius-md)]"
-						: ""
+						: isFailed
+							? "ring-1 ring-[var(--color-destructive)]/30 rounded-[var(--radius-md)]"
+							: ""
 				}
 			>
-				<Image
-					src={imageUrl}
-					alt={`Generated cover for ${playlistName} — ${generation.style_name}`}
-					width={size}
-					height={size}
-					className="aspect-square w-full rounded-[var(--radius-md)] object-cover"
-					loading={isNewest ? undefined : "lazy"}
-					unoptimized
-				/>
+				{imageUrl ? (
+					<Image
+						src={imageUrl}
+						alt={`Generated cover for ${playlistName} — ${generation.style_name}`}
+						width={size}
+						height={size}
+						className="aspect-square w-full rounded-[var(--radius-md)] object-cover"
+						loading={isNewest ? undefined : "lazy"}
+						unoptimized
+					/>
+				) : (
+					<div
+						className="flex aspect-square w-full items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-destructive)]/5"
+						style={{ width: size, height: size }}
+					>
+						<svg
+							width="24"
+							height="24"
+							viewBox="0 0 24 24"
+							fill="none"
+							aria-hidden="true"
+						>
+							<path
+								d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
+								stroke="var(--color-destructive)"
+								strokeWidth="1.5"
+								strokeLinecap="round"
+							/>
+						</svg>
+					</div>
+				)}
 			</div>
+
+			{/* Error message for failed generations */}
+			{isFailed && generation.errorMessage && (
+				<p
+					className="text-[10px] leading-snug text-[var(--color-destructive)] line-clamp-2"
+					title={generation.errorMessage}
+				>
+					{generation.errorMessage}
+				</p>
+			)}
 
 			{/* Metadata */}
 			<span className="text-xs text-[var(--color-text-muted)]">

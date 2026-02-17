@@ -14,9 +14,10 @@ database_id = "f3e9b7fb-50c1-45c9-be51-eeef3bcc07a2"
 binding = "IMAGES"
 bucket_name = "disc-images"
 
-# Cron triggers — runs every hour, handler filters by user cron_time
+# Cron trigger: every 5 min — handles both watcher (auto-detect) and
+# scheduled cron (smart regeneration, matched by user's HH:MM cron_time)
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/5 * * * *"]
 
 # Secrets (set via: wrangler secret put <KEY> --config workers/cron/wrangler.toml)
 # - REPLICATE_API_TOKEN

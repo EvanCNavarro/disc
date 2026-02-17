@@ -54,9 +54,9 @@ export async function GET(
 				row.track_snapshot,
 			) as AnalysisDetail["trackSnapshot"],
 			trackExtractions: JSON.parse(row.track_extractions) as TrackExtraction[],
-			convergenceResult: JSON.parse(
-				row.convergence_result,
-			) as ConvergenceResult,
+			convergenceResult: row.convergence_result
+				? (JSON.parse(row.convergence_result) as ConvergenceResult)
+				: null,
 			chosenObject: row.chosen_object,
 			aestheticContext: row.aesthetic_context,
 			styleName: row.style_name,

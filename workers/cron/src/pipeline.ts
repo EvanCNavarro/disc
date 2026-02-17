@@ -80,7 +80,7 @@ export interface PipelineEnv {
 }
 
 export interface PipelineOptions {
-	triggerType?: "manual" | "cron";
+	triggerType?: "manual" | "cron" | "auto";
 	revisionNotes?: string;
 	customObject?: string;
 	lightExtractionText?: string;
