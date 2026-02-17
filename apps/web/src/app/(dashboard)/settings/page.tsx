@@ -2,6 +2,7 @@ import { revalidatePath } from "next/cache";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DefaultStylePicker } from "@/components/settings/DefaultStylePicker";
+import { ScheduleForm } from "@/components/settings/ScheduleForm";
 import { auth, signOut } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -90,43 +91,11 @@ export default async function SettingsPage() {
 				<h2 className="mb-[var(--space-md)] text-sm font-medium text-[var(--color-text-muted)] uppercase tracking-wide">
 					Schedule
 				</h2>
-				<form
-					action={updateSchedule}
-					className="flex flex-col gap-[var(--space-md)]"
-				>
-					<div className="flex items-center gap-[var(--space-md)]">
-						<label htmlFor="cron_time" className="text-sm font-medium">
-							Daily run time (UTC)
-						</label>
-						<input
-							type="time"
-							id="cron_time"
-							name="cron_time"
-							defaultValue={user.cron_time}
-							className="rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm"
-						/>
-					</div>
-
-					<div className="flex items-center gap-[var(--space-sm)]">
-						<input
-							type="checkbox"
-							id="cron_enabled"
-							name="cron_enabled"
-							defaultChecked={user.cron_enabled === 1}
-							className="h-4 w-4 rounded border-[var(--color-border)] accent-[var(--color-accent)]"
-						/>
-						<label htmlFor="cron_enabled" className="text-sm">
-							Enable daily generation
-						</label>
-					</div>
-
-					<button
-						type="submit"
-						className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)]"
-					>
-						Save Schedule
-					</button>
-				</form>
+				<ScheduleForm
+					utcTime={user.cron_time}
+					cronEnabled={user.cron_enabled === 1}
+					saveAction={updateSchedule}
+				/>
 			</section>
 
 			{/* ── Default Style ── */}
