@@ -247,7 +247,7 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 		const playlistsResult = await env.DB.prepare(
 			`SELECT id, spotify_playlist_id, name, user_id
 			 FROM playlists
-			 WHERE user_id = ? AND cron_enabled = 1`,
+			 WHERE user_id = ? AND cron_enabled = 1 AND is_collaborative = 0`,
 		)
 			.bind(user.id)
 			.all<PlaylistRow>();
@@ -374,20 +374,20 @@ async function setupTrigger(
 		const placeholders = options.playlistIds.map(() => "?").join(",");
 		playlistsResult = await env.DB.prepare(
 			`SELECT id, spotify_playlist_id, name, user_id
-			 FROM playlists WHERE id IN (${placeholders}) AND user_id = ?`,
+			 FROM playlists WHERE id IN (${placeholders}) AND user_id = ? AND is_collaborative = 0`,
 		)
 			.bind(...options.playlistIds, user.id)
 			.all<PlaylistRow>();
 	} else if (options.playlistId) {
 		playlistsResult = await env.DB.prepare(
 			`SELECT id, spotify_playlist_id, name, user_id
-			 FROM playlists WHERE id = ? AND user_id = ?`,
+			 FROM playlists WHERE id = ? AND user_id = ? AND is_collaborative = 0`,
 		)
 			.bind(options.playlistId, user.id)
 			.all<PlaylistRow>();
 	} else {
 		let playlistQuery = `SELECT id, spotify_playlist_id, name, user_id
-			FROM playlists WHERE user_id = ?`;
+			FROM playlists WHERE user_id = ? AND is_collaborative = 0`;
 		const bindParams: unknown[] = [user.id];
 
 		if (options.playlistFilter) {

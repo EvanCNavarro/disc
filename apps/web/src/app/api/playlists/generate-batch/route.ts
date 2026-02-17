@@ -41,14 +41,46 @@ export async function POST(request: Request) {
 
 	// Validate all playlists belong to this user
 	const placeholders = body.playlistIds.map(() => "?").join(",");
-	const playlists = await queryD1<{ id: string; name: string }>(
-		`SELECT id, name FROM playlists WHERE id IN (${placeholders}) AND user_id = ?`,
+	const playlists = await queryD1<{
+		id: string;
+		name: string;
+		is_collaborative: number;
+		owner_spotify_id: string | null;
+	}>(
+		`SELECT id, name, is_collaborative, owner_spotify_id FROM playlists WHERE id IN (${placeholders}) AND user_id = ?`,
 		[...body.playlistIds, userId],
 	);
 
 	if (playlists.length !== body.playlistIds.length) {
 		return NextResponse.json(
 			{ error: "Some playlists not found or not owned by user" },
+			{ status: 400 },
+		);
+	}
+
+	// Filter out collaborative or non-owned playlists (Spotify API rejects cover uploads for these)
+	const eligible = playlists.filter((p) => {
+		if (p.is_collaborative) {
+			console.warn(
+				`[generate-batch] Skipping collaborative playlist "${p.name}" (${p.id})`,
+			);
+			return false;
+		}
+		if (p.owner_spotify_id && p.owner_spotify_id !== session.spotifyId) {
+			console.warn(
+				`[generate-batch] Skipping non-owned playlist "${p.name}" (${p.id}), owner: ${p.owner_spotify_id}`,
+			);
+			return false;
+		}
+		return true;
+	});
+
+	if (eligible.length === 0) {
+		return NextResponse.json(
+			{
+				error:
+					"No eligible playlists — collaborative and non-owned playlists cannot receive generated covers",
+			},
 			{ status: 400 },
 		);
 	}
@@ -63,7 +95,10 @@ export async function POST(request: Request) {
 		);
 	}
 
-	// Send one trigger with all playlist IDs — worker marks them as "queued"
+	const eligibleIds = eligible.map((p) => p.id);
+	const skipped = playlists.length - eligible.length;
+
+	// Send one trigger with eligible playlist IDs — worker marks them as "queued"
 	// immediately, then processes them sequentially. Use a 15s timeout since
 	// setupTrigger (queuing) is fast but the full pipeline takes minutes.
 	try {
@@ -74,7 +109,7 @@ export async function POST(request: Request) {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({
-				playlist_ids: body.playlistIds,
+				playlist_ids: eligibleIds,
 				style_id: body.styleId,
 				trigger_type: "manual",
 			}),
@@ -84,7 +119,8 @@ export async function POST(request: Request) {
 		if (response.ok) {
 			return NextResponse.json({
 				total: playlists.length,
-				succeeded: playlists.length,
+				succeeded: eligible.length,
+				skipped,
 				failed: 0,
 			});
 		}
@@ -99,7 +135,8 @@ export async function POST(request: Request) {
 		if (error instanceof DOMException && error.name === "TimeoutError") {
 			return NextResponse.json({
 				total: playlists.length,
-				succeeded: playlists.length,
+				succeeded: eligible.length,
+				skipped,
 				failed: 0,
 			});
 		}
