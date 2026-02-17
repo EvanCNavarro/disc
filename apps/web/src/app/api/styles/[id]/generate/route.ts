@@ -1,8 +1,9 @@
 import type { DbStyle } from "@disc/shared";
-import { CONFIG } from "@disc/shared";
+import { CONFIG, calculateImageCost } from "@disc/shared";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
+import { insertUsageEvent } from "@/lib/usage";
 
 const REPLICATE_API_BASE = "https://api.replicate.com/v1";
 
@@ -192,6 +193,35 @@ export async function POST(
 					: "Unknown error",
 		};
 	});
+
+	// Look up internal user ID for usage tracking
+	const users = await queryD1<{ id: string }>(
+		"SELECT id FROM users WHERE spotify_user_id = ?",
+		[session.spotifyId],
+	);
+	const userId = users[0]?.id;
+
+	// Record usage events for each image generated
+	if (userId) {
+		for (const result of results) {
+			const succeeded = result.status === "fulfilled";
+			await insertUsageEvent({
+				userId,
+				actionType: "style_preview",
+				model: style.replicate_model,
+				costUsd: calculateImageCost(style.replicate_model),
+				styleId: id,
+				modelUnitCost: calculateImageCost(style.replicate_model),
+				triggerSource: "user",
+				status: succeeded ? "success" : "failed",
+				errorMessage: succeeded
+					? undefined
+					: result.reason instanceof Error
+						? result.reason.message
+						: "Unknown error",
+			});
+		}
+	}
 
 	return NextResponse.json({ images });
 }

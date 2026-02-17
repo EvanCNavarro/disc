@@ -5,8 +5,9 @@
  */
 
 import type { DbStyle } from "@disc/shared";
-import { CANONICAL_SUBJECT, CONFIG } from "@disc/shared";
+import { CANONICAL_SUBJECT, CONFIG, calculateImageCost } from "@disc/shared";
 import { queryD1 } from "./db";
+import { insertUsageEvent } from "./usage";
 
 const REPLICATE_API_BASE = "https://api.replicate.com/v1";
 
@@ -137,6 +138,31 @@ export async function generateThumbnail(
 
 		consecutiveErrors = 0;
 		prediction = (await pollResp.json()) as ReplicatePrediction;
+	}
+
+	// Record usage event for billing (fire-and-forget)
+	// Look up the single active user for attribution
+	const activeUsers = await queryD1<{ id: string }>(
+		"SELECT id FROM users LIMIT 1",
+		[],
+	);
+	const ownerId = activeUsers[0]?.id;
+
+	if (ownerId) {
+		await insertUsageEvent({
+			userId: ownerId,
+			actionType: "style_thumbnail",
+			model: style.replicate_model,
+			costUsd: calculateImageCost(style.replicate_model),
+			styleId,
+			modelUnitCost: calculateImageCost(style.replicate_model),
+			triggerSource: "user",
+			status: prediction.status === "succeeded" ? "success" : "failed",
+			errorMessage:
+				prediction.status !== "succeeded"
+					? (prediction.error ?? `Prediction ${prediction.status}`)
+					: undefined,
+		});
 	}
 
 	if (prediction.status !== "succeeded") {
