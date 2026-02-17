@@ -8,6 +8,7 @@ interface DashboardLiveStatsProps {
 		generated: number;
 		needs_regen: number;
 		failed: number;
+		collaborative: number;
 	};
 	totalGenerations: number;
 }
@@ -36,8 +37,8 @@ export function DashboardLiveStats({
 	}
 
 	return (
-		<section className="grid grid-cols-2 gap-[var(--space-md)] sm:grid-cols-3 lg:grid-cols-5">
-			<StatCard label="Total" value={stats.total} />
+		<section className="grid grid-cols-2 gap-[var(--space-md)] sm:grid-cols-3 lg:grid-cols-6">
+			<StatCard label="Total" value={stats.total + stats.collaborative} />
 			<StatCard label="Generated" value={stats.generated} accent />
 			<StatCard
 				label="Needs Regen"
@@ -45,6 +46,11 @@ export function DashboardLiveStats({
 				warning={stats.needs_regen > 0}
 			/>
 			<StatCard label="Failed" value={stats.failed} error={stats.failed > 0} />
+			<StatCard
+				label="Collaborative"
+				value={stats.collaborative}
+				muted={stats.collaborative > 0}
+			/>
 			<StatCard
 				label="Total Images"
 				value={liveTotal}
@@ -61,6 +67,7 @@ function StatCard({
 	accent,
 	warning,
 	error,
+	muted,
 	className,
 }: {
 	label: string;
@@ -68,12 +75,14 @@ function StatCard({
 	accent?: boolean;
 	warning?: boolean;
 	error?: boolean;
+	muted?: boolean;
 	className?: string;
 }) {
 	let valueColor = "text-[var(--color-text)]";
 	if (accent && value > 0) valueColor = "text-[var(--color-accent)]";
 	if (warning) valueColor = "text-[var(--color-warning)]";
 	if (error) valueColor = "text-[var(--color-destructive)]";
+	if (muted) valueColor = "text-[var(--color-text-muted)]";
 
 	return (
 		<div

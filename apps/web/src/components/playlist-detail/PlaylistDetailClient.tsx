@@ -33,7 +33,7 @@ interface Analysis {
 		durationMs?: number;
 	}>;
 	track_extractions: TrackExtraction[];
-	convergence_result: ConvergenceResult;
+	convergence_result: ConvergenceResult | null;
 	tracks_added: string[] | null;
 	tracks_removed: string[] | null;
 	outlier_count: number;
@@ -69,6 +69,7 @@ interface PlaylistDetailClientProps {
 	analysis: Analysis | null;
 	generations: Generation[];
 	claimedObjects: ClaimedObject[];
+	isCollaborative?: boolean;
 }
 
 const TIER_SCORES: Record<string, number> = { high: 3, medium: 2, low: 1 };
@@ -100,6 +101,7 @@ export function PlaylistDetailClient({
 	analysis,
 	generations,
 	claimedObjects,
+	isCollaborative = false,
 }: PlaylistDetailClientProps) {
 	const router = useRouter();
 	const [generating, setGenerating] = useState(false);
@@ -138,16 +140,23 @@ export function PlaylistDetailClient({
 				<button
 					type="button"
 					onClick={handleGenerate}
-					disabled={generating || isProcessing}
+					disabled={generating || isProcessing || isCollaborative}
 					className="inline-flex items-center gap-2 rounded-[var(--radius-md)] bg-[var(--color-accent)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
 				>
 					<HugeiconsIcon icon={RepeatIcon} size={16} />
-					{generating
-						? "Generating..."
-						: isProcessing
-							? "Processing..."
-							: "Generate Now"}
+					{isCollaborative
+						? "Generation Disabled"
+						: generating
+							? "Generating..."
+							: isProcessing
+								? "Processing..."
+								: "Generate Now"}
 				</button>
+				{isCollaborative && (
+					<span className="text-sm text-[var(--color-text-muted)]">
+						Collaborative playlists are not eligible for cover generation.
+					</span>
+				)}
 				{error && (
 					<span className="text-sm text-[var(--color-destructive)]">
 						{error}
@@ -175,42 +184,46 @@ export function PlaylistDetailClient({
 								</span>
 							</div>
 
-							{/* Convergence candidates */}
-							{analysis.convergence_result?.candidates?.length > 1 && (
-								<div className="flex flex-col gap-[var(--space-sm)] border-t border-[var(--color-border-subtle)] pt-[var(--space-md)]">
-									<h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
-										Candidates
-									</h3>
-									<div className="flex flex-col gap-2">
-										{analysis.convergence_result.candidates.map((c) => (
-											<div
-												key={`${c.rank}-${c.object}`}
-												className={`flex items-start gap-3 rounded-[var(--radius-md)] p-2.5 text-sm ${
-													c.rank ===
-													analysis.convergence_result.selectedIndex + 1
-														? "bg-[var(--color-accent-muted)] border border-[var(--color-accent)]"
-														: "bg-[var(--color-surface)]"
-												}`}
-											>
-												<span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[var(--color-bg)] text-xs font-bold">
-													{c.rank}
-												</span>
-												<div className="flex flex-col gap-0.5 min-w-0">
-													<span className="font-medium">{c.object}</span>
-													<span className="text-xs text-[var(--color-text-muted)]">
-														{c.reasoning}
-													</span>
-												</div>
+							{/* Convergence candidates — only for full APLOTOCA runs */}
+							{analysis.convergence_result &&
+								analysis.convergence_result.candidates.length > 1 &&
+								(() => {
+									const conv = analysis.convergence_result;
+									return (
+										<div className="flex flex-col gap-[var(--space-sm)] border-t border-[var(--color-border-subtle)] pt-[var(--space-md)]">
+											<h3 className="text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
+												Candidates
+											</h3>
+											<div className="flex flex-col gap-2">
+												{conv.candidates.map((c) => (
+													<div
+														key={`${c.rank}-${c.object}`}
+														className={`flex items-start gap-3 rounded-[var(--radius-md)] p-2.5 text-sm ${
+															c.rank === conv.selectedIndex + 1
+																? "bg-[var(--color-accent-muted)] border border-[var(--color-accent)]"
+																: "bg-[var(--color-surface)]"
+														}`}
+													>
+														<span className="shrink-0 w-5 h-5 flex items-center justify-center rounded-full bg-[var(--color-bg)] text-xs font-bold">
+															{c.rank}
+														</span>
+														<div className="flex flex-col gap-0.5 min-w-0">
+															<span className="font-medium">{c.object}</span>
+															<span className="text-xs text-[var(--color-text-muted)]">
+																{c.reasoning}
+															</span>
+														</div>
+													</div>
+												))}
 											</div>
-										))}
-									</div>
-									{analysis.convergence_result.collisionNotes && (
-										<p className="text-xs text-[var(--color-text-faint)] italic">
-											{analysis.convergence_result.collisionNotes}
-										</p>
-									)}
-								</div>
-							)}
+											{conv.collisionNotes && (
+												<p className="text-xs text-[var(--color-text-faint)] italic">
+													{conv.collisionNotes}
+												</p>
+											)}
+										</div>
+									);
+								})()}
 
 							{/* Change detection */}
 							{(analysis.tracks_added || analysis.tracks_removed) && (

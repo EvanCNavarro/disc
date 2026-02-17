@@ -11,8 +11,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-	title: "DISC - Daily Image Spotify Covers",
-	description: "AI-generated playlist covers, refreshed daily",
+	title: {
+		default: "DISC",
+		template: "%s | DISC",
+	},
+	description: "AI-generated playlist cover art from your Spotify library",
+	metadataBase: new URL(
+		process.env.VERCEL_PROJECT_PRODUCTION_URL
+			? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+			: "http://127.0.0.1:4993",
+	),
+	openGraph: {
+		title: "DISC",
+		description: "AI-generated playlist cover art from your Spotify library",
+		siteName: "DISC",
+		type: "website",
+	},
 };
 
 export default function RootLayout({

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { DashboardLiveStats } from "@/components/dashboard/DashboardLiveStats";
@@ -5,6 +6,8 @@ import { GenerationHistoryTable } from "@/components/dashboard/GenerationHistory
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { formatTimestamp } from "@/lib/format";
+
+export const metadata: Metadata = { title: "Dashboard" };
 
 interface StyleRow {
 	id: string;
@@ -17,6 +20,7 @@ interface PlaylistStats {
 	generated: number;
 	needs_regen: number;
 	failed: number;
+	collaborative: number;
 }
 
 interface UserRow {
@@ -42,32 +46,39 @@ async function getDashboardData(spotifyId: string) {
 	if (!user) return null;
 
 	try {
-		const [styleRows, statRows, lastJobRows, totalGenRows] = await Promise.all([
-			queryD1<StyleRow>(
-				"SELECT id, name, description FROM styles WHERE id = ? LIMIT 1",
-				[user.style_preference],
-			),
-			queryD1<{ status: string; cnt: number }>(
-				`SELECT status, COUNT(*) as cnt FROM playlists WHERE user_id = ? GROUP BY status`,
-				[user.id],
-			),
-			queryD1<JobRow>(
-				`SELECT status, completed_at, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 2`,
-				[user.id],
-			),
-			queryD1<{ cnt: number }>(
-				`SELECT COUNT(*) as cnt FROM generations WHERE user_id = ? AND status = 'completed'`,
-				[user.id],
-			),
-		]);
+		const [styleRows, statRows, collabRows, lastJobRows, totalGenRows] =
+			await Promise.all([
+				queryD1<StyleRow>(
+					"SELECT id, name, description FROM styles WHERE id = ? LIMIT 1",
+					[user.style_preference],
+				),
+				queryD1<{ status: string; cnt: number }>(
+					`SELECT status, COUNT(*) as cnt FROM playlists WHERE user_id = ? AND deleted_at IS NULL AND contributor_count <= 1 GROUP BY status`,
+					[user.id],
+				),
+				queryD1<{ cnt: number }>(
+					`SELECT COUNT(*) as cnt FROM playlists WHERE user_id = ? AND deleted_at IS NULL AND contributor_count > 1`,
+					[user.id],
+				),
+				queryD1<JobRow>(
+					`SELECT status, completed_at, created_at FROM jobs WHERE user_id = ? ORDER BY created_at DESC LIMIT 2`,
+					[user.id],
+				),
+				queryD1<{ cnt: number }>(
+					`SELECT COUNT(*) as cnt FROM generations WHERE user_id = ? AND status = 'completed'`,
+					[user.id],
+				),
+			]);
 
 		const style = styleRows[0] ?? null;
+		const collaborativeCount = Number(collabRows[0]?.cnt ?? 0);
 
 		const stats: PlaylistStats = {
 			total: 0,
 			generated: 0,
 			needs_regen: 0,
 			failed: 0,
+			collaborative: collaborativeCount,
 		};
 		for (const row of statRows) {
 			const count = Number(row.cnt);
@@ -93,7 +104,13 @@ async function getDashboardData(spotifyId: string) {
 		return {
 			user,
 			style: null,
-			stats: { total: 0, generated: 0, needs_regen: 0, failed: 0 },
+			stats: {
+				total: 0,
+				generated: 0,
+				needs_regen: 0,
+				failed: 0,
+				collaborative: 0,
+			},
 			totalGenerations: 0,
 			lastJob: null,
 			previousJob: null,

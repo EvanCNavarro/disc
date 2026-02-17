@@ -9,6 +9,7 @@ import {
 	ArrowLeft02Icon,
 	SpotifyIcon,
 } from "@hugeicons-pro/core-stroke-rounded";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PlaylistDetailClient } from "@/components/playlist-detail/PlaylistDetailClient";
@@ -31,7 +32,7 @@ interface PlaylistDetailData {
 			durationMs?: number;
 		}>;
 		track_extractions: TrackExtraction[];
-		convergence_result: ConvergenceResult;
+		convergence_result: ConvergenceResult | null;
 		tracks_added: string[] | null;
 		tracks_removed: string[] | null;
 		outlier_count: number;
@@ -73,7 +74,7 @@ async function fetchPlaylistDetail(
 			 WHERE g.playlist_id = p.id AND g.status = 'completed'
 			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key
 		 FROM playlists p
-		 WHERE p.spotify_playlist_id = ? AND p.user_id = ?`,
+		 WHERE p.spotify_playlist_id = ? AND p.user_id = ? AND p.deleted_at IS NULL`,
 		[spotifyPlaylistId, userId],
 	);
 
@@ -134,7 +135,9 @@ async function fetchPlaylistDetail(
 				style_name: row.style_name,
 				track_snapshot: JSON.parse(row.track_snapshot),
 				track_extractions: JSON.parse(row.track_extractions),
-				convergence_result: JSON.parse(row.convergence_result),
+				convergence_result: row.convergence_result
+					? JSON.parse(row.convergence_result)
+					: null,
 				tracks_added: row.tracks_added ? JSON.parse(row.tracks_added) : null,
 				tracks_removed: row.tracks_removed
 					? JSON.parse(row.tracks_removed)
@@ -149,6 +152,29 @@ async function fetchPlaylistDetail(
 	}
 
 	return { playlist, analysis, generations, claimedObjects };
+}
+
+export async function generateMetadata({
+	params,
+}: {
+	params: Promise<{ spotifyId: string }>;
+}): Promise<Metadata> {
+	const session = await auth();
+	if (!session?.spotifyId) return { title: "Playlist" };
+
+	const { spotifyId } = await params;
+	const users = await queryD1<{ id: string }>(
+		"SELECT id FROM users WHERE spotify_user_id = ?",
+		[session.spotifyId],
+	);
+	if (users.length === 0) return { title: "Playlist" };
+
+	const rows = await queryD1<{ name: string }>(
+		"SELECT name FROM playlists WHERE spotify_playlist_id = ? AND user_id = ? AND deleted_at IS NULL LIMIT 1",
+		[spotifyId, users[0].id],
+	);
+
+	return { title: rows[0]?.name ?? "Playlist" };
 }
 
 export default async function PlaylistDetailPage({
@@ -174,6 +200,7 @@ export default async function PlaylistDetailPage({
 	const completedGenerations = generations.filter(
 		(g) => g.status === "completed" && g.r2_key,
 	);
+	const isCollaborative = playlist.contributor_count > 1;
 
 	return (
 		<div className="flex flex-col gap-[var(--space-xl)]">
@@ -185,6 +212,19 @@ export default async function PlaylistDetailPage({
 				<HugeiconsIcon icon={ArrowLeft02Icon} size={16} />
 				Back to playlists
 			</Link>
+
+			{/* Collaborative banner */}
+			{isCollaborative && (
+				<output className="flex items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] px-[var(--space-lg)] py-[var(--space-md)]">
+					<span className="text-sm font-medium text-[var(--color-text-secondary)]">
+						Collaborative Playlist
+					</span>
+					<span className="text-sm text-[var(--color-text-muted)]">
+						&mdash; Generation is disabled for playlists with multiple
+						contributors ({playlist.contributor_count} contributors detected).
+					</span>
+				</output>
+			)}
 
 			{/* Header */}
 			<div className="flex flex-col gap-[var(--space-lg)] sm:flex-row sm:items-start sm:gap-[var(--space-xl)]">
@@ -213,7 +253,14 @@ export default async function PlaylistDetailPage({
 
 				{/* Info */}
 				<div className="flex flex-col gap-[var(--space-sm)] min-w-0">
-					<h1 className="text-2xl font-bold truncate">{playlist.name}</h1>
+					<div className="flex items-center gap-[var(--space-sm)]">
+						<h1 className="text-2xl font-bold truncate">{playlist.name}</h1>
+						{isCollaborative && (
+							<span className="shrink-0 rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-2 py-0.5 text-xs font-medium text-[var(--color-text-muted)]">
+								Collaborative
+							</span>
+						)}
+					</div>
 					{playlist.description && (
 						<p className="text-sm text-[var(--color-text-secondary)] line-clamp-2">
 							{playlist.description}
@@ -252,6 +299,7 @@ export default async function PlaylistDetailPage({
 				analysis={analysis}
 				generations={generations}
 				claimedObjects={claimedObjects}
+				isCollaborative={isCollaborative}
 			/>
 		</div>
 	);

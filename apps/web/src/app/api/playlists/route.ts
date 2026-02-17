@@ -63,26 +63,37 @@ export async function GET() {
 	);
 
 	const playlists = await queryD1<
-		DbPlaylist & { latest_r2_key: string | null }
+		DbPlaylist & {
+			latest_r2_key: string | null;
+			latest_error_message: string | null;
+		}
 	>(
 		`SELECT p.*,
 			(SELECT g.r2_key FROM generations g
 			 WHERE g.playlist_id = p.id AND g.status = 'completed'
-			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key
+			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key,
+			(SELECT g.error_message FROM generations g
+			 WHERE g.playlist_id = p.id AND g.status = 'failed'
+			 ORDER BY g.created_at DESC LIMIT 1) AS latest_error_message
 		 FROM playlists p
-		 WHERE p.user_id = ? ORDER BY p.name ASC`,
+		 WHERE p.user_id = ? AND p.deleted_at IS NULL ORDER BY p.name ASC`,
 		[userId],
 	);
 
-	// Compute status counts
+	// Compute status counts (collaborative playlists excluded from eligible/pending)
 	const counts = {
 		total: playlists.length,
 		completed: 0,
 		processing: 0,
 		pending: 0,
 		failed: 0,
+		collaborative: 0,
 	};
 	for (const p of playlists) {
+		if (p.contributor_count > 1) {
+			counts.collaborative++;
+			continue;
+		}
 		if (p.status === "generated") counts.completed++;
 		else if (p.status === "processing" || p.status === "queued")
 			counts.processing++;

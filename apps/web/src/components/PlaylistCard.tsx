@@ -31,6 +31,11 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
 						<HugeiconsIcon icon={MusicNote01Icon} size={48} strokeWidth={1} />
 					</div>
 				)}
+				{playlist.collaborative && (
+					<span className="absolute top-2 right-2 rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-2 py-0.5 text-[10px] font-medium text-[var(--color-text-muted)] shadow-[var(--shadow-sm)]">
+						Collaborative
+					</span>
+				)}
 			</div>
 
 			<div className="flex flex-col gap-1 p-[var(--space-md)]">
