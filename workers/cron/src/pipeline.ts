@@ -20,6 +20,7 @@ import type {
 	PipelineStepName,
 	StepData,
 } from "@disc/shared";
+import { calculateImageCost, calculateLLMCost, LLM_MODEL } from "@disc/shared";
 import {
 	convergeAndSelect,
 	detectChanges,
@@ -28,7 +29,6 @@ import {
 } from "./extraction";
 import { compressForSpotify } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
-import { calculateImageCost, calculateLLMCost, LLM_MODEL } from "./pricing";
 import { generateImage } from "./replicate";
 import { fetchPlaylistTracks, uploadPlaylistCover } from "./spotify";
 
