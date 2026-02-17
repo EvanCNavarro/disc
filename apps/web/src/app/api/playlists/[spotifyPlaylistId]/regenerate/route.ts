@@ -50,8 +50,13 @@ export async function POST(
 	const userId = users[0].id;
 
 	// Resolve Spotify playlist ID → D1 internal ID
-	const playlists = await queryD1<{ id: string; name: string }>(
-		"SELECT id, name FROM playlists WHERE spotify_playlist_id = ? AND user_id = ?",
+	const playlists = await queryD1<{
+		id: string;
+		name: string;
+		is_collaborative: number;
+		contributor_count: number;
+	}>(
+		"SELECT id, name, is_collaborative, contributor_count FROM playlists WHERE spotify_playlist_id = ? AND user_id = ? AND deleted_at IS NULL",
 		[spotifyPlaylistId, userId],
 	);
 	if (playlists.length === 0) {
@@ -59,6 +64,13 @@ export async function POST(
 	}
 
 	const playlist = playlists[0];
+
+	if (playlist.is_collaborative || playlist.contributor_count > 1) {
+		return NextResponse.json(
+			{ error: "Cannot generate for collaborative playlists" },
+			{ status: 400 },
+		);
+	}
 
 	const workerUrl = process.env.DISC_WORKER_URL;
 	const workerToken = process.env.WORKER_AUTH_TOKEN;

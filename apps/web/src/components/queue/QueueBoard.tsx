@@ -4,18 +4,22 @@ import type {
 	DbPlaylist,
 	GenerationVersion,
 	PipelineProgress,
+	QueueCompletedJob,
 } from "@disc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQueue } from "@/context/QueueContext";
+import { formatCost, formatDuration } from "@/lib/format";
 import { CronIdleBanner } from "./CronIdleBanner";
 import { CronProgressPanel } from "./CronProgressPanel";
 import { ImageReviewModal } from "./ImageReviewModal";
 import { QueueCard, type ScheduleConfig } from "./QueueCard";
 import { QueueColumn } from "./QueueColumn";
 import { StylePicker } from "./StylePicker";
+import { WatcherBanner } from "./WatcherBanner";
 
 interface PlaylistWithImage extends DbPlaylist {
 	latest_r2_key: string | null;
+	latest_error_message: string | null;
 }
 
 interface Style {
@@ -48,6 +52,108 @@ function parseProgress(data: string | null): PipelineProgress | null {
 	}
 }
 
+function CompletionBanner({
+	job,
+	onDismiss,
+}: {
+	job: QueueCompletedJob;
+	onDismiss: () => void;
+}) {
+	const allSucceeded = job.failedPlaylists === 0;
+	const allFailed = job.completedPlaylists === 0 && job.failedPlaylists > 0;
+
+	return (
+		<output
+			className={`glass flex flex-col gap-[var(--space-md)] rounded-[var(--radius-lg)] border p-[var(--space-lg)] ${
+				allFailed
+					? "border-[var(--color-destructive)]/30"
+					: allSucceeded
+						? "border-[var(--color-success)]/30"
+						: "border-[var(--color-warning)]/30"
+			}`}
+		>
+			<div className="flex items-center justify-between">
+				<div className="flex items-center gap-[var(--space-sm)]">
+					<span
+						className={`inline-flex h-2.5 w-2.5 rounded-full ${
+							allFailed
+								? "bg-[var(--color-destructive)]"
+								: allSucceeded
+									? "bg-[var(--color-success)]"
+									: "bg-[var(--color-warning)]"
+						}`}
+					/>
+					<h2 className="text-lg font-semibold">
+						{job.type === "cron"
+							? "Cron Run"
+							: job.type === "auto"
+								? "Auto-Detect Run"
+								: "Batch Run"}{" "}
+						{allFailed ? "Failed" : "Complete"}
+					</h2>
+				</div>
+				<button
+					type="button"
+					onClick={onDismiss}
+					className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] transition-colors"
+				>
+					Dismiss
+				</button>
+			</div>
+
+			<div className="flex flex-wrap gap-[var(--space-sm)]">
+				<span className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium">
+					<span className="text-[var(--color-text-muted)]">Style: </span>
+					<span className="text-[var(--color-text)]">{job.style.name}</span>
+				</span>
+				<span className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium">
+					<span className="text-[var(--color-text-muted)]">Duration: </span>
+					<span className="text-[var(--color-text)]">
+						{formatDuration(job.durationMs)}
+					</span>
+				</span>
+				{job.totalCostUsd != null && (
+					<span className="rounded-[var(--radius-pill)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium">
+						<span className="text-[var(--color-text-muted)]">Cost: </span>
+						<span className="font-mono text-[var(--color-text)]">
+							{formatCost(job.totalCostUsd)}
+						</span>
+					</span>
+				)}
+			</div>
+
+			<div className="flex items-center gap-[var(--space-md)] border-t border-[var(--color-border)] pt-[var(--space-md)]">
+				{job.totalPlaylists === 0 ? (
+					<span className="text-sm text-[var(--color-text-muted)]">
+						No playlists were scheduled for generation
+					</span>
+				) : (
+					<>
+						{job.completedPlaylists > 0 && (
+							<span className="text-sm text-[var(--color-success)]">
+								{job.completedPlaylists} succeeded
+							</span>
+						)}
+						{job.failedPlaylists > 0 && (
+							<span className="text-sm text-[var(--color-destructive)]">
+								{job.failedPlaylists} failed
+							</span>
+						)}
+						<span className="text-sm text-[var(--color-text-muted)]">
+							{job.totalPlaylists} total
+						</span>
+						{job.failedPlaylists > 0 && (
+							<span className="ml-auto text-xs text-[var(--color-text-faint)]">
+								See generation history for details
+							</span>
+						)}
+					</>
+				)}
+			</div>
+		</output>
+	);
+}
+
 export function QueueBoard() {
 	const [playlists, setPlaylists] = useState<PlaylistWithImage[]>([]);
 	const [styles, setStyles] = useState<Style[]>([]);
@@ -62,10 +168,14 @@ export function QueueBoard() {
 	const [generations, setGenerations] = useState<GenerationVersion[]>([]);
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const { status: queueStatus } = useQueue();
-	const hasCronActive = queueStatus?.activeJob !== null;
+	const hasCronActive = Boolean(queueStatus?.activeJob);
+	const lastCompleted = queueStatus?.lastCompletedJob ?? null;
+	const showCompletionBanner =
+		lastCompleted && lastCompleted.id !== dismissedJobId;
 
 	// Fetch playlists, styles, and session
 	const fetchData = useCallback(async () => {
@@ -90,10 +200,12 @@ export function QueueBoard() {
 
 			if (sessionRes.ok) {
 				const session = (await sessionRes.json()) as {
+					spotifyId?: string;
 					user?: { spotifyId?: string };
 				};
-				if (session.user?.spotifyId) {
-					setSpotifyId(session.user.spotifyId);
+				const sid = session.spotifyId ?? session.user?.spotifyId;
+				if (sid) {
+					setSpotifyId(sid);
 				}
 			}
 		} catch {
@@ -107,6 +219,7 @@ export function QueueBoard() {
 	const isEligible = useCallback(
 		(p: PlaylistWithImage) =>
 			!p.is_collaborative &&
+			p.contributor_count <= 1 &&
 			(!p.owner_spotify_id || p.owner_spotify_id === spotifyId),
 		[spotifyId],
 	);
@@ -274,8 +387,14 @@ export function QueueBoard() {
 				}),
 			});
 			if (!res.ok) {
-				const data = (await res.json()) as { error?: string };
-				throw new Error(data.error ?? "Batch trigger failed");
+				let message = `Batch trigger failed (${res.status})`;
+				try {
+					const data = (await res.json()) as { error?: string };
+					if (data.error) message = data.error;
+				} catch {
+					// Server returned non-JSON error body — use status-based message
+				}
+				throw new Error(message);
 			}
 			await fetchData();
 		} catch (err) {
@@ -446,10 +565,21 @@ export function QueueBoard() {
 				/>
 			) : (
 				<>
+					{/* Completion summary banner */}
+					{showCompletionBanner && (
+						<CompletionBanner
+							job={lastCompleted}
+							onDismiss={() => setDismissedJobId(lastCompleted.id)}
+						/>
+					)}
+
 					{/* Cron idle banner */}
 					{queueStatus?.nextCron && (
 						<CronIdleBanner nextCron={queueStatus.nextCron} />
 					)}
+
+					{/* Watcher countdown */}
+					<WatcherBanner />
 
 					{/* Sticky action header — style picker + playlist count */}
 					<div className="sticky top-[calc(var(--nav-height)+var(--space-md)*2)] z-30 flex flex-wrap items-center gap-[var(--space-sm)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] px-[var(--space-md)] py-[var(--space-sm)]">
@@ -523,6 +653,9 @@ export function QueueBoard() {
 											coverUrl={p.spotify_cover_url}
 											progressData={p.progress_data}
 											lastGeneratedAt={p.last_generated_at}
+											isCollaborative={Boolean(
+												p.is_collaborative || p.contributor_count > 1,
+											)}
 											locked={!isEligible(p)}
 											selected={selectedIds.has(p.id)}
 											onSelect={isEligible(p) ? toggleSelect : undefined}
@@ -600,6 +733,7 @@ export function QueueBoard() {
 											}
 											progressData={p.progress_data}
 											lastGeneratedAt={p.last_generated_at}
+											errorMessage={p.latest_error_message}
 											onViewDetails={setModalPlaylistId}
 										/>
 									))
@@ -658,6 +792,10 @@ export function QueueBoard() {
 											}
 											progressData={p.progress_data}
 											lastGeneratedAt={p.last_generated_at}
+											errorMessage={p.latest_error_message}
+											isCollaborative={Boolean(
+												p.is_collaborative || p.contributor_count > 1,
+											)}
 											locked={!isEligible(p)}
 											selected={selectedIds.has(p.id)}
 											onSelect={isEligible(p) ? toggleSelect : undefined}

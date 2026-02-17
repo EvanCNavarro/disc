@@ -1,8 +1,24 @@
 "use client";
 
 import type { PipelineProgress, PipelineStepName } from "@disc/shared";
+import { APLOTOCA } from "@disc/shared";
 import Image from "next/image";
+import { useState } from "react";
+import { Dropdown, type DropdownOption } from "@/components/Dropdown";
 import { formatRelative } from "@/lib/format";
+
+const ANALYSIS_MODE_OPTIONS: DropdownOption[] = [
+	{
+		value: APLOTOCA.modes.full.value,
+		label: APLOTOCA.modes.full.label,
+		description: APLOTOCA.modes.full.description,
+	},
+	{
+		value: APLOTOCA.modes.custom.value,
+		label: APLOTOCA.modes.custom.label,
+		description: APLOTOCA.modes.custom.description,
+	},
+];
 
 export interface ScheduleConfig {
 	analysisMode: "with" | "without";
@@ -34,6 +50,8 @@ interface QueueCardProps {
 	coverUrl: string | null;
 	progressData: string | null;
 	lastGeneratedAt: string | null;
+	errorMessage?: string | null;
+	isCollaborative?: boolean;
 	selected?: boolean;
 	locked?: boolean;
 	scheduleConfig?: ScheduleConfig;
@@ -52,6 +70,8 @@ export function QueueCard({
 	coverUrl,
 	progressData,
 	lastGeneratedAt,
+	errorMessage,
+	isCollaborative,
 	selected,
 	locked,
 	scheduleConfig,
@@ -96,32 +116,80 @@ export function QueueCard({
 	return (
 		<div
 			className={[
-				"glass rounded-[var(--radius-md)] p-[var(--space-md)] transition-all duration-[var(--duration-fast)]",
+				"relative rounded-[var(--radius-md)] p-[var(--space-md)] transition-all duration-[var(--duration-fast)]",
+				locked
+					? "border border-dashed border-[var(--color-border)] bg-[var(--color-surface)]/50"
+					: "glass",
 				selected ? "ring-2 ring-[var(--color-accent)]" : "",
-				locked ? "opacity-50" : "",
 			].join(" ")}
 		>
 			<div className="flex items-center gap-[var(--space-md)]">
-				{/* Selection / status indicator */}
-				{locked ? (
-					<span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] border border-[var(--color-border)] bg-[var(--color-surface)]">
-						<svg
-							width="14"
-							height="14"
-							viewBox="0 0 14 14"
-							fill="none"
-							aria-hidden="true"
-						>
-							<path
-								d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6M3.5 6h7a1 1 0 0 1 1 1v4.5a1 1 0 0 1-1 1h-7a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z"
-								stroke="var(--color-text-faint)"
-								strokeWidth="1.2"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-							/>
-						</svg>
+				{/* Badges for locked / collaborative cards */}
+				{locked && (
+					<span className="absolute right-2 top-2 flex items-center gap-1 rounded-[var(--radius-pill)] bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-faint)]">
+						{isCollaborative ? (
+							<>
+								<svg
+									width="10"
+									height="10"
+									viewBox="0 0 16 16"
+									fill="none"
+									aria-hidden="true"
+								>
+									<circle
+										cx="5"
+										cy="6"
+										r="2.5"
+										stroke="currentColor"
+										strokeWidth="1.3"
+									/>
+									<circle
+										cx="11"
+										cy="6"
+										r="2.5"
+										stroke="currentColor"
+										strokeWidth="1.3"
+									/>
+									<path
+										d="M1 14c0-2.2 1.8-4 4-4M7 14c0-2.2 1.8-4 4-4"
+										stroke="currentColor"
+										strokeWidth="1.3"
+										strokeLinecap="round"
+									/>
+								</svg>
+								Collaborative
+							</>
+						) : (
+							<>
+								<svg
+									width="10"
+									height="10"
+									viewBox="0 0 16 16"
+									fill="none"
+									aria-hidden="true"
+								>
+									<circle
+										cx="8"
+										cy="8"
+										r="7"
+										stroke="currentColor"
+										strokeWidth="1.5"
+									/>
+									<path
+										d="M5 11L11 5"
+										stroke="currentColor"
+										strokeWidth="1.5"
+										strokeLinecap="round"
+									/>
+								</svg>
+								Not eligible
+							</>
+						)}
 					</span>
-				) : isSelectable && onSelect ? (
+				)}
+
+				{/* Selection / status indicator */}
+				{isSelectable && onSelect ? (
 					<button
 						type="button"
 						onClick={() => onSelect(id)}
@@ -199,9 +267,9 @@ export function QueueCard({
 				<div className="min-w-0 flex-1">
 					<p className="truncate text-sm font-semibold">{name}</p>
 					{locked ? (
-						<span className="inline-block rounded-[var(--radius-pill)] bg-[var(--color-surface-hover)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--color-text-faint)]">
-							Not included
-						</span>
+						<p className="text-sm text-[var(--color-text-faint)]">
+							Collaborative or non-owned
+						</p>
 					) : scheduleConfig ? (
 						<p className="text-sm text-[var(--color-warning)]">Scheduled</p>
 					) : status === "queued" ? (
@@ -212,7 +280,12 @@ export function QueueCard({
 							{STEP_LABELS[progress.currentStep] ?? progress.currentStep}
 						</p>
 					) : status === "failed" ? (
-						<p className="text-sm text-[var(--color-destructive)]">Failed</p>
+						<p
+							className="text-sm text-[var(--color-destructive)] truncate"
+							title={errorMessage ?? undefined}
+						>
+							{errorMessage || "Failed"}
+						</p>
 					) : status === "generated" ? (
 						<p className="text-sm text-[var(--color-accent)]">
 							Generated {lastGeneratedAt ? formatRelative(lastGeneratedAt) : ""}
@@ -265,18 +338,21 @@ export function QueueCard({
 			{/* Schedule config (for Scheduled column items) */}
 			{scheduleConfig && (
 				<div className="flex flex-col gap-[var(--space-xs)] mt-[var(--space-xs)] border-t border-[var(--color-border)] pt-[var(--space-xs)]">
-					<select
-						value={scheduleConfig.analysisMode}
-						onChange={(e) =>
-							onConfigChange?.({
-								analysisMode: e.target.value as "with" | "without",
-							})
-						}
-						className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-2 py-1 text-xs text-[var(--color-text)]"
-					>
-						<option value="with">With lyrics analysis</option>
-						<option value="without">Without lyrics analysis</option>
-					</select>
+					<div className="flex items-center gap-[var(--space-xs)] min-w-0">
+						<div className="min-w-0 flex-1">
+							<Dropdown
+								options={ANALYSIS_MODE_OPTIONS}
+								value={scheduleConfig.analysisMode}
+								onChange={(val) =>
+									onConfigChange?.({
+										analysisMode: val as "with" | "without",
+									})
+								}
+								label="Pipeline mode"
+							/>
+						</div>
+						<AplotocaInfoButton />
+					</div>
 
 					{scheduleConfig.analysisMode === "without" && (
 						<input
@@ -310,6 +386,39 @@ export function QueueCard({
 						className="h-full rounded-full bg-[var(--color-info)] transition-all duration-500"
 						style={{ width: `${stepPercent}%` }}
 					/>
+				</div>
+			)}
+		</div>
+	);
+}
+
+function AplotocaInfoButton() {
+	const [open, setOpen] = useState(false);
+
+	return (
+		<div className="relative shrink-0">
+			<button
+				type="button"
+				onMouseEnter={() => setOpen(true)}
+				onMouseLeave={() => setOpen(false)}
+				onFocus={() => setOpen(true)}
+				onBlur={() => setOpen(false)}
+				className="flex h-5 w-5 items-center justify-center rounded-full border border-[var(--color-border)] text-[10px] font-bold text-[var(--color-text-secondary)] hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] transition-colors"
+				aria-label="What is APLOTOCA?"
+			>
+				?
+			</button>
+			{open && (
+				<div className="absolute right-0 top-full z-50 mt-1.5 w-64 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-3 shadow-[var(--shadow-md)]">
+					<p className="text-xs font-semibold text-[var(--color-text)]">
+						{APLOTOCA.acronym}
+					</p>
+					<p className="mt-0.5 text-[10px] text-[var(--color-text-secondary)]">
+						{APLOTOCA.fullForm}
+					</p>
+					<p className="mt-1.5 text-[10px] leading-relaxed text-[var(--color-text-muted)]">
+						{APLOTOCA.description}
+					</p>
 				</div>
 			)}
 		</div>

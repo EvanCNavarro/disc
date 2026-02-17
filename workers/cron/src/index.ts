@@ -1,23 +1,16 @@
 /**
  * DISC Cron Worker
  *
- * Scheduled worker that generates AI cover art for playlists.
- * Runs every hour, filters users by their cron_time preference.
+ * Two scheduled triggers:
+ * - Hourly (0 * * * *): Smart cron — regenerates playlists not on current style
+ * - Every 5 min (＊/5 * * * *): Watcher — detects new Spotify playlists, auto-triggers APLOTOCA
  *
- * Flow:
- * 1. Determine current hour (UTC)
- * 2. Query users where cron_enabled=1 and cron_time matches current hour
- * 3. For each user:
- *    a. Create job record
- *    b. Refresh Spotify access token
- *    c. Get active style
- *    d. For each cron-enabled playlist: generate cover art
- *    e. Update job record with totals
+ * Also exposes HTTP endpoints: /trigger, /health, /upload, /image
  */
 
 import type { DbStyle } from "@disc/shared";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
-import { refreshAccessToken } from "./spotify";
+import { fetchUserPlaylists, refreshAccessToken } from "./spotify";
 
 export interface Env {
 	DB: D1Database;
@@ -36,6 +29,29 @@ interface UserRow {
 	encrypted_refresh_token: string;
 	style_preference: string | null;
 	cron_time: string;
+	spotify_user_id: string;
+}
+
+interface WatchedPlaylistRow {
+	id: string;
+	spotify_playlist_id: string;
+	auto_detect_status: string | null;
+	auto_detect_snapshot: string | null;
+	auto_detected_at: string | null;
+	contributor_count: number;
+}
+
+/** Returns true if the user's cron_time (HH:MM UTC) is within N minutes from now. */
+function isCronWithinMinutes(cronTime: string, minutes: number): boolean {
+	const [hh, mm] = cronTime.split(":").map(Number);
+	if (Number.isNaN(hh) || Number.isNaN(mm)) return false;
+	const now = new Date();
+	const cronTotalMin = hh * 60 + mm;
+	const nowTotalMin = now.getUTCHours() * 60 + now.getUTCMinutes();
+	// Handle midnight wrap (e.g., now=23:55, cron=00:03)
+	let diff = cronTotalMin - nowTotalMin;
+	if (diff < 0) diff += 1440;
+	return diff > 0 && diff <= minutes;
 }
 
 interface PlaylistRow {
@@ -51,36 +67,16 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
-		const currentHour = new Date().getUTCHours().toString().padStart(2, "0");
-		console.log(`[Cron] Running for hour ${currentHour}:00 UTC`);
-
-		const usersResult = await env.DB.prepare(
-			`SELECT id, encrypted_refresh_token, style_preference, cron_time
-			 FROM users
-			 WHERE cron_enabled = 1
-			   AND substr(cron_time, 1, 2) = ?`,
-		)
-			.bind(currentHour)
-			.all<UserRow>();
-
-		const users = usersResult.results;
-
-		if (users.length === 0) {
-			console.log(`[Cron] No users scheduled for ${currentHour}:00 UTC`);
-			return;
-		}
-
-		console.log(`[Cron] Processing ${users.length} user(s)`);
-
-		for (const user of users) {
-			ctx.waitUntil(processUser(user, env));
-		}
+		// Single */5 trigger handles both watcher and scheduled cron.
+		// Watcher always runs. Cron runs if a user's HH:MM falls in this 5-min window.
+		ctx.waitUntil(watchForNewPlaylists(env));
+		ctx.waitUntil(runScheduledCron(env));
 	},
 
 	async fetch(
 		request: Request,
 		env: Env,
-		_ctx: ExecutionContext,
+		ctx: ExecutionContext,
 	): Promise<Response> {
 		const url = new URL(request.url);
 
@@ -114,6 +110,7 @@ export default {
 					custom_object?: string;
 					light_extraction_text?: string;
 					trigger_type?: string;
+					access_token?: string;
 				};
 
 				const options: TriggerOptions = {
@@ -125,20 +122,22 @@ export default {
 					revisionNotes: body.revision_notes ?? null,
 					customObject: body.custom_object ?? null,
 					lightExtractionText: body.light_extraction_text ?? null,
-					triggerType: (body.trigger_type as "manual" | "cron") ?? "manual",
+					triggerType:
+						(body.trigger_type as "manual" | "cron" | "auto") ?? "manual",
+					accessToken: body.access_token ?? null,
 				};
 
-				// Validate and set playlists to "processing" synchronously
+				// Validate and set playlists to "queued" synchronously
 				const setup = await setupTrigger(env, options);
 
-				// Run pipeline synchronously — keeps the fetch handler alive
-				// for the full duration. ctx.waitUntil() gets killed after
-				// ~30s, but the fetch handler stays alive as long as the
-				// HTTP connection is open.
-				await executeTrigger(env, setup, options);
+				// Run pipeline in background — ctx.waitUntil() keeps the
+				// worker alive for I/O-bound operations (same pattern as
+				// the scheduled/cron handler). Respond immediately so the
+				// caller doesn't need to hold the connection open.
+				ctx.waitUntil(executeTrigger(env, setup, options));
 
 				return Response.json({
-					completed: true,
+					queued: true,
 					playlists: setup.playlists.map((p) => p.name),
 				});
 			} catch (error) {
@@ -216,6 +215,47 @@ export default {
 	},
 };
 
+/**
+ * Checks if any user's cron_time falls in the current 5-minute window.
+ * E.g., at 09:25 UTC, matches cron_time values "09:25" through "09:29".
+ */
+async function runScheduledCron(env: Env): Promise<void> {
+	const now = new Date();
+	const hh = now.getUTCHours().toString().padStart(2, "0");
+	const mm = now.getUTCMinutes();
+	const windowStart = `${hh}:${mm.toString().padStart(2, "0")}`;
+	const windowEndMm = mm + 4;
+	const windowEnd =
+		windowEndMm >= 60
+			? `${((now.getUTCHours() + 1) % 24).toString().padStart(2, "0")}:${(windowEndMm - 60).toString().padStart(2, "0")}`
+			: `${hh}:${windowEndMm.toString().padStart(2, "0")}`;
+
+	console.log(
+		`[Cron] Checking for users in window ${windowStart}–${windowEnd}`,
+	);
+
+	const usersResult = await env.DB.prepare(
+		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id
+		 FROM users
+		 WHERE cron_enabled = 1
+		   AND cron_time >= ? AND cron_time <= ?`,
+	)
+		.bind(windowStart, windowEnd)
+		.all<UserRow>();
+
+	const users = usersResult.results;
+
+	if (users.length === 0) {
+		return;
+	}
+
+	console.log(`[Cron] ${users.length} user(s) scheduled in this window`);
+
+	for (const user of users) {
+		await processUser(user, env);
+	}
+}
+
 async function processUser(user: UserRow, env: Env): Promise<void> {
 	const jobId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
 
@@ -246,17 +286,50 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 			throw new Error(`Style not found: ${styleId}`);
 		}
 
+		// Smart cron: only regenerate playlists that DON'T have a completed
+		// generation with the current style since its last update.
 		const playlistsResult = await env.DB.prepare(
-			`SELECT id, spotify_playlist_id, name, user_id
-			 FROM playlists
-			 WHERE user_id = ? AND cron_enabled = 1 AND is_collaborative = 0`,
+			`SELECT p.id, p.spotify_playlist_id, p.name, p.user_id
+			 FROM playlists p
+			 WHERE p.user_id = ?
+			   AND p.deleted_at IS NULL
+			   AND p.cron_enabled = 1
+			   AND p.is_collaborative = 0
+			   AND p.contributor_count <= 1
+			   AND p.track_count > 0
+			   AND NOT EXISTS (
+			     SELECT 1 FROM generations g
+			     WHERE g.playlist_id = p.id
+			       AND g.style_id = ?
+			       AND g.status = 'completed'
+			       AND g.created_at > ?
+			   )`,
 		)
-			.bind(user.id)
+			.bind(user.id, style.id, style.updated_at)
 			.all<PlaylistRow>();
 
 		const playlists = playlistsResult.results;
+
+		if (playlists.length === 0) {
+			console.log(
+				`[Cron] User ${user.id}: all playlists up-to-date with style "${style.id}" — nothing to do`,
+			);
+			await env.DB.prepare(
+				`UPDATE jobs
+				 SET status = 'completed',
+					 total_playlists = 0,
+					 completed_playlists = 0,
+					 failed_playlists = 0,
+					 completed_at = datetime('now')
+				 WHERE id = ?`,
+			)
+				.bind(jobId)
+				.run();
+			return;
+		}
+
 		console.log(
-			`[Cron] Found ${playlists.length} playlist(s) for user ${user.id}`,
+			`[Cron] Found ${playlists.length} playlist(s) needing regeneration for user ${user.id} (style: ${style.id})`,
 		);
 
 		let completed = 0;
@@ -321,7 +394,8 @@ interface TriggerOptions {
 	revisionNotes: string | null;
 	customObject: string | null;
 	lightExtractionText: string | null;
-	triggerType: "manual" | "cron";
+	triggerType: "manual" | "cron" | "auto";
+	accessToken: string | null;
 }
 
 interface TriggerSetup {
@@ -350,15 +424,23 @@ async function setupTrigger(
 		throw new Error("No user with encrypted refresh token found");
 	}
 
-	console.log(`[Trigger] Refreshing token for user ${user.id}`);
-	const accessToken = await refreshAccessToken(
-		user.encrypted_refresh_token,
-		env.ENCRYPTION_KEY,
-		env.SPOTIFY_CLIENT_ID,
-		env.SPOTIFY_CLIENT_SECRET,
-		env.DB,
-		user.id,
-	);
+	let accessToken: string;
+	if (options.accessToken) {
+		console.log(
+			`[Trigger] Using caller-provided access token for user ${user.id}`,
+		);
+		accessToken = options.accessToken;
+	} else {
+		console.log(`[Trigger] Refreshing token for user ${user.id}`);
+		accessToken = await refreshAccessToken(
+			user.encrypted_refresh_token,
+			env.ENCRYPTION_KEY,
+			env.SPOTIFY_CLIENT_ID,
+			env.SPOTIFY_CLIENT_SECRET,
+			env.DB,
+			user.id,
+		);
+	}
 
 	const styleId =
 		options.styleId || user.style_preference || "bleached-crosshatch";
@@ -377,20 +459,20 @@ async function setupTrigger(
 		const placeholders = options.playlistIds.map(() => "?").join(",");
 		playlistsResult = await env.DB.prepare(
 			`SELECT id, spotify_playlist_id, name, user_id
-			 FROM playlists WHERE id IN (${placeholders}) AND user_id = ? AND is_collaborative = 0`,
+			 FROM playlists WHERE id IN (${placeholders}) AND user_id = ? AND is_collaborative = 0 AND deleted_at IS NULL`,
 		)
 			.bind(...options.playlistIds, user.id)
 			.all<PlaylistRow>();
 	} else if (options.playlistId) {
 		playlistsResult = await env.DB.prepare(
 			`SELECT id, spotify_playlist_id, name, user_id
-			 FROM playlists WHERE id = ? AND user_id = ? AND is_collaborative = 0`,
+			 FROM playlists WHERE id = ? AND user_id = ? AND is_collaborative = 0 AND deleted_at IS NULL`,
 		)
 			.bind(options.playlistId, user.id)
 			.all<PlaylistRow>();
 	} else {
 		let playlistQuery = `SELECT id, spotify_playlist_id, name, user_id
-			FROM playlists WHERE user_id = ? AND is_collaborative = 0`;
+			FROM playlists WHERE user_id = ? AND is_collaborative = 0 AND deleted_at IS NULL`;
 		const bindParams: unknown[] = [user.id];
 
 		if (options.playlistFilter) {
@@ -456,4 +538,279 @@ async function executeTrigger(
 			},
 		);
 	}
+}
+
+// ──────────────────────────────────────────────
+// Playlist Watcher — detects new playlists from Spotify
+// ──────────────────────────────────────────────
+
+/**
+ * Runs every 5 minutes. For each cron-enabled user:
+ * 1. Fetch playlists from Spotify
+ * 2. Upsert new playlists into D1
+ * 3. Track stabilization via snapshot_id
+ * 4. When stable (2 ticks, ~10 min) + has tracks → trigger APLOTOCA
+ */
+async function watchForNewPlaylists(env: Env): Promise<void> {
+	console.log("[Watcher] Tick");
+
+	const usersResult = await env.DB.prepare(
+		`SELECT id, encrypted_refresh_token, style_preference, cron_time, spotify_user_id
+		 FROM users
+		 WHERE cron_enabled = 1
+		   AND encrypted_refresh_token IS NOT NULL`,
+	).all<UserRow>();
+
+	const users = usersResult.results;
+	if (users.length === 0) {
+		console.log("[Watcher] No cron-enabled users");
+		return;
+	}
+
+	for (const user of users) {
+		try {
+			await watchUser(user, env);
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : "Unknown error";
+			console.error(`[Watcher] Error for user ${user.id}: ${msg}`);
+		}
+	}
+}
+
+async function watchUser(user: UserRow, env: Env): Promise<void> {
+	const accessToken = await refreshAccessToken(
+		user.encrypted_refresh_token,
+		env.ENCRYPTION_KEY,
+		env.SPOTIFY_CLIENT_ID,
+		env.SPOTIFY_CLIENT_SECRET,
+		env.DB,
+		user.id,
+	);
+
+	const spotifyPlaylists = await fetchUserPlaylists(accessToken);
+
+	// Get known playlists from D1
+	const knownResult = await env.DB.prepare(
+		`SELECT id, spotify_playlist_id, auto_detect_status, auto_detect_snapshot, auto_detected_at, contributor_count
+		 FROM playlists WHERE user_id = ? AND deleted_at IS NULL`,
+	)
+		.bind(user.id)
+		.all<WatchedPlaylistRow>();
+
+	const knownMap = new Map(
+		knownResult.results.map((p) => [p.spotify_playlist_id, p]),
+	);
+
+	const spotifyIds = new Set(spotifyPlaylists.map((p) => p.id));
+
+	// Soft-delete playlists no longer on Spotify
+	for (const known of knownResult.results) {
+		if (!spotifyIds.has(known.spotify_playlist_id)) {
+			await env.DB.prepare(
+				"UPDATE playlists SET deleted_at = datetime('now') WHERE id = ?",
+			)
+				.bind(known.id)
+				.run();
+			console.log(
+				`[Watcher] Soft-deleted playlist ${known.spotify_playlist_id}`,
+			);
+		}
+	}
+
+	// Process each Spotify playlist
+	for (const sp of spotifyPlaylists) {
+		// Skip collaborative or non-owned
+		if (sp.collaborative || sp.ownerId !== user.spotify_user_id) continue;
+
+		const existing = knownMap.get(sp.id);
+
+		if (!existing) {
+			// New playlist — insert into D1 and start watching
+			const playlistId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+			await env.DB.prepare(
+				`INSERT INTO playlists (id, user_id, spotify_playlist_id, name, track_count,
+				  is_collaborative, owner_spotify_id, auto_detected_at, auto_detect_snapshot,
+				  auto_detect_status, cron_enabled, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, 0, ?, datetime('now'), ?, 'watching', 1,
+				  datetime('now'), datetime('now'))`,
+			)
+				.bind(
+					playlistId,
+					user.id,
+					sp.id,
+					sp.name,
+					sp.trackCount,
+					sp.ownerId,
+					sp.snapshotId,
+				)
+				.run();
+
+			console.log(
+				`[Watcher] New playlist detected: "${sp.name}" (${sp.id}) — watching`,
+			);
+			continue;
+		}
+
+		// Existing playlist — update metadata
+		await env.DB.prepare(
+			`UPDATE playlists SET name = ?, track_count = ?, updated_at = datetime('now')
+			 WHERE id = ?`,
+		)
+			.bind(sp.name, sp.trackCount, existing.id)
+			.run();
+
+		// Playlist synced by web app before watcher ran — start watching it
+		if (!existing.auto_detected_at) {
+			await env.DB.prepare(
+				`UPDATE playlists SET auto_detected_at = datetime('now'),
+				  auto_detect_status = 'watching', auto_detect_snapshot = ? WHERE id = ?`,
+			)
+				.bind(sp.snapshotId, existing.id)
+				.run();
+			console.log(
+				`[Watcher] Picked up synced playlist "${sp.name}" — now watching`,
+			);
+			continue;
+		}
+
+		// Skip existing playlists with multiple contributors
+		if (existing.contributor_count > 1) continue;
+
+		// Only process playlists in watcher state machine
+		if (
+			!existing.auto_detect_status ||
+			existing.auto_detect_status === "triggered"
+		) {
+			continue;
+		}
+
+		if (existing.auto_detect_status === "watching") {
+			// Check if snapshot changed
+			if (sp.snapshotId !== existing.auto_detect_snapshot) {
+				// Still changing — reset snapshot
+				await env.DB.prepare(
+					`UPDATE playlists SET auto_detect_snapshot = ? WHERE id = ?`,
+				)
+					.bind(sp.snapshotId, existing.id)
+					.run();
+				console.log(`[Watcher] "${sp.name}" still changing — reset snapshot`);
+			} else if (sp.trackCount > 0) {
+				// Snapshot stable for one tick — mark as stable
+				await env.DB.prepare(
+					`UPDATE playlists SET auto_detect_status = 'stable' WHERE id = ?`,
+				)
+					.bind(existing.id)
+					.run();
+				console.log(`[Watcher] "${sp.name}" stable — will trigger next tick`);
+			}
+		} else if (existing.auto_detect_status === "stable") {
+			// Check snapshot is still the same (second consecutive stable tick)
+			if (sp.snapshotId !== existing.auto_detect_snapshot) {
+				// Changed again — go back to watching
+				await env.DB.prepare(
+					`UPDATE playlists SET auto_detect_status = 'watching', auto_detect_snapshot = ? WHERE id = ?`,
+				)
+					.bind(sp.snapshotId, existing.id)
+					.run();
+				console.log(
+					`[Watcher] "${sp.name}" changed during stabilization — back to watching`,
+				);
+			} else if (sp.trackCount > 0) {
+				// Defer if user's scheduled cron is within 10 minutes
+				if (user.cron_time && isCronWithinMinutes(user.cron_time, 10)) {
+					console.log(
+						`[Watcher] "${sp.name}" ready but cron at ${user.cron_time} UTC is within 10 min — deferring`,
+					);
+					continue;
+				}
+
+				// Stable for 2 ticks — trigger generation
+				console.log(`[Watcher] "${sp.name}" ready — triggering APLOTOCA`);
+				await triggerAutoGeneration(user, existing, env, accessToken);
+			}
+		}
+	}
+}
+
+async function triggerAutoGeneration(
+	user: UserRow,
+	playlist: WatchedPlaylistRow,
+	env: Env,
+	accessToken: string,
+): Promise<void> {
+	const jobId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+
+	// Create job record so it appears in queue UI
+	await env.DB.prepare(
+		`INSERT INTO jobs (id, user_id, type, status, total_playlists, started_at, created_at)
+		 VALUES (?, ?, 'auto', 'processing', 1, datetime('now'), datetime('now'))`,
+	)
+		.bind(jobId, user.id)
+		.run();
+
+	// Mark playlist as triggered
+	await env.DB.prepare(
+		`UPDATE playlists SET auto_detect_status = 'triggered', status = 'queued' WHERE id = ?`,
+	)
+		.bind(playlist.id)
+		.run();
+
+	const styleId = user.style_preference || "bleached-crosshatch";
+	const style = await env.DB.prepare("SELECT * FROM styles WHERE id = ?")
+		.bind(styleId)
+		.first<DbStyle>();
+
+	if (!style) {
+		console.error(`[Watcher] Style not found: ${styleId}`);
+		await env.DB.prepare(
+			"UPDATE jobs SET status = 'failed', completed_at = datetime('now') WHERE id = ?",
+		)
+			.bind(jobId)
+			.run();
+		return;
+	}
+
+	const pipelineEnv: PipelineEnv = {
+		DB: env.DB,
+		IMAGES: env.IMAGES,
+		REPLICATE_API_TOKEN: env.REPLICATE_API_TOKEN,
+		OPENAI_API_KEY: env.OPENAI_API_KEY,
+	};
+
+	const playlistRow: PlaylistRow = {
+		id: playlist.id,
+		spotify_playlist_id: playlist.spotify_playlist_id,
+		name: "", // Will be overwritten by pipeline
+		user_id: user.id,
+	};
+
+	// Fetch the name
+	const nameResult = await env.DB.prepare(
+		"SELECT name FROM playlists WHERE id = ?",
+	)
+		.bind(playlist.id)
+		.first<{ name: string }>();
+	playlistRow.name = nameResult?.name ?? "Unknown";
+
+	const result = await generateForPlaylist(
+		playlistRow,
+		style,
+		accessToken,
+		pipelineEnv,
+		{ triggerType: "auto" },
+	);
+
+	const status = result.success ? "completed" : "failed";
+	await env.DB.prepare(
+		`UPDATE jobs
+		 SET status = ?,
+			 completed_playlists = ?,
+			 failed_playlists = ?,
+			 completed_at = datetime('now')
+		 WHERE id = ?`,
+	)
+		.bind(status, result.success ? 1 : 0, result.success ? 0 : 1, jobId)
+		.run();
+
+	console.log(`[Watcher] Auto-generation for "${playlistRow.name}": ${status}`);
 }
