@@ -4,33 +4,27 @@ import type { QueueStatus } from "@disc/shared";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { formatElapsed } from "@/lib/format";
 import { formatLocalTime } from "@/lib/timezone";
 
 interface QueueNavTooltipProps {
 	status: QueueStatus;
 }
 
-function elapsed(startedAt: string): string {
-	const ms = Date.now() - new Date(startedAt).getTime();
-	const mins = Math.floor(ms / 60_000);
-	const secs = Math.floor((ms % 60_000) / 1_000);
-	if (mins > 0) return `${mins}m ${secs}s`;
-	return `${secs}s`;
-}
-
 export function QueueNavTooltip({ status }: QueueNavTooltipProps) {
 	const { activeJob, nextCron } = status;
+	const startedAt = activeJob?.startedAt ?? null;
 	const [elapsedStr, setElapsedStr] = useState(
-		activeJob ? elapsed(activeJob.startedAt) : "",
+		startedAt ? formatElapsed(startedAt) : "",
 	);
 
 	useEffect(() => {
-		if (!activeJob) return;
+		if (!startedAt) return;
 		const interval = setInterval(() => {
-			setElapsedStr(elapsed(activeJob.startedAt));
+			setElapsedStr(formatElapsed(startedAt));
 		}, 1_000);
 		return () => clearInterval(interval);
-	}, [activeJob]);
+	}, [startedAt]);
 
 	if (activeJob) {
 		const current = activeJob.playlists.find((p) => p.status === "processing");

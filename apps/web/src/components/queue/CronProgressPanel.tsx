@@ -3,20 +3,12 @@
 import type { QueueActiveJob, QueuePlaylistStatus } from "@disc/shared";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { formatCost } from "@/lib/format";
+import { formatCost, formatElapsed } from "@/lib/format";
 import { QueueColumn } from "./QueueColumn";
 
 interface CronProgressPanelProps {
 	job: QueueActiveJob;
 	onViewPlaylist?: (playlistId: string) => void;
-}
-
-function elapsed(startedAt: string): string {
-	const ms = Date.now() - new Date(startedAt).getTime();
-	const mins = Math.floor(ms / 60_000);
-	const secs = Math.floor((ms % 60_000) / 1_000);
-	if (mins > 0) return `${mins}m ${secs}s`;
-	return `${secs}s`;
 }
 
 function MetadataPill({
@@ -108,11 +100,11 @@ export function CronProgressPanel({
 	job,
 	onViewPlaylist,
 }: CronProgressPanelProps) {
-	const [elapsedStr, setElapsedStr] = useState(elapsed(job.startedAt));
+	const [elapsedStr, setElapsedStr] = useState(formatElapsed(job.startedAt));
 
 	useEffect(() => {
 		const interval = setInterval(() => {
-			setElapsedStr(elapsed(job.startedAt));
+			setElapsedStr(formatElapsed(job.startedAt));
 		}, 1_000);
 		return () => clearInterval(interval);
 	}, [job.startedAt]);

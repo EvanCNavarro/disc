@@ -32,6 +32,14 @@ export function formatTimestamp(dateStr: string): string {
 	return timestampFormatter.format(new Date(dateStr));
 }
 
+export function formatElapsed(startedAt: string): string {
+	const ms = Date.now() - new Date(startedAt).getTime();
+	const mins = Math.floor(ms / 60_000);
+	const secs = Math.floor((ms % 60_000) / 1_000);
+	if (mins > 0) return `${mins}m ${secs}s`;
+	return `${secs}s`;
+}
+
 export function formatRelative(dateStr: string): string {
 	const date = new Date(dateStr);
 	const now = new Date();

@@ -48,7 +48,7 @@ function QueueNavItemWithTooltip({ active }: { active: boolean }) {
 	const { status } = useQueue();
 	const [showTooltip, setShowTooltip] = useState(false);
 	const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const isActive = status?.activeJob !== null;
+	const isActive = Boolean(status?.activeJob);
 
 	const handleMouseEnter = useCallback(() => {
 		if (hideTimeoutRef.current) {

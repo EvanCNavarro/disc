@@ -34,7 +34,7 @@ export function QueueProvider({ children }: { children: ReactNode }) {
 	const [status, setStatus] = useState<QueueStatus | null>(null);
 	const [loading, setLoading] = useState(true);
 	const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const isActive = status?.activeJob !== null;
+	const isActive = Boolean(status?.activeJob);
 
 	const fetchStatus = useCallback(async () => {
 		try {

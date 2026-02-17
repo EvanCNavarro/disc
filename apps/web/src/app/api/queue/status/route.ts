@@ -75,6 +75,16 @@ export async function GET() {
 	}
 	const user = users[0];
 
+	// Fetch user's active style once (reused by activeJob + nextCron)
+	const styleRows = await queryD1<StyleRow>(
+		"SELECT id, name FROM styles WHERE id = ? LIMIT 1",
+		[user.style_preference],
+	);
+	const userStyle = styleRows[0] ?? {
+		id: user.style_preference,
+		name: "Unknown",
+	};
+
 	// 1. Check for active job
 	const activeJobs = await queryD1<JobRow>(
 		"SELECT id, type, status, started_at FROM jobs WHERE user_id = ? AND status = 'processing' ORDER BY started_at DESC LIMIT 1",
@@ -104,16 +114,6 @@ export async function GET() {
 				END`,
 			[user.id],
 		);
-
-		// Get active style
-		const styleRows = await queryD1<StyleRow>(
-			"SELECT id, name FROM styles WHERE id = ? LIMIT 1",
-			[user.style_preference],
-		);
-		const style = styleRows[0] ?? {
-			id: user.style_preference,
-			name: "Unknown",
-		};
 
 		let totalCost = 0;
 		let completedCount = 0;
@@ -154,7 +154,7 @@ export async function GET() {
 			id: job.id,
 			type: job.type as "cron" | "manual",
 			startedAt: job.started_at,
-			style,
+			style: userStyle,
 			playlists: playlistStatuses,
 			totalCost,
 			completedCount,
@@ -167,18 +167,9 @@ export async function GET() {
 	let nextCron: QueueStatus["nextCron"] = null;
 
 	if (user.cron_enabled) {
-		const styleRows = await queryD1<StyleRow>(
-			"SELECT id, name FROM styles WHERE id = ? LIMIT 1",
-			[user.style_preference],
-		);
-		const style = styleRows[0] ?? {
-			id: user.style_preference,
-			name: "Unknown",
-		};
-
 		nextCron = {
 			utcTime: user.cron_time,
-			style,
+			style: userStyle,
 		};
 	}
 
