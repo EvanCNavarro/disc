@@ -133,21 +133,55 @@ export async function generateThumbnail(
 		return null;
 	}
 
-	const imageUrl = Array.isArray(prediction.output)
+	const replicateUrl = Array.isArray(prediction.output)
 		? prediction.output[0]
 		: prediction.output;
 
-	if (!imageUrl) {
+	if (!replicateUrl) {
 		console.error("[Thumbnail] No output URL from prediction");
 		return null;
 	}
 
-	// Persist thumbnail URL to D1
-	await queryD1(
-		"UPDATE styles SET thumbnail_url = ?, updated_at = datetime('now') WHERE id = ?",
-		[imageUrl, styleId],
+	// Download image from Replicate and upload to R2 for permanent storage
+	const r2Key = `styles/${styleId}/thumbnail.png`;
+	const workerUrl = process.env.DISC_WORKER_URL;
+	const workerToken = process.env.WORKER_AUTH_TOKEN;
+
+	if (!workerUrl || !workerToken) {
+		console.error("[Thumbnail] Missing DISC_WORKER_URL or WORKER_AUTH_TOKEN");
+		return null;
+	}
+
+	const imageResp = await fetch(replicateUrl);
+	if (!imageResp.ok) {
+		console.error(`[Thumbnail] Failed to download image: ${imageResp.status}`);
+		return null;
+	}
+	const imageBytes = await imageResp.arrayBuffer();
+
+	const uploadResp = await fetch(
+		`${workerUrl}/upload?key=${encodeURIComponent(r2Key)}`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${workerToken}`,
+				"Content-Type": "image/png",
+			},
+			body: imageBytes,
+		},
 	);
 
-	console.log(`[Thumbnail] Generated for style ${styleId}: ${imageUrl}`);
-	return imageUrl;
+	if (!uploadResp.ok) {
+		console.error(`[Thumbnail] R2 upload failed: ${uploadResp.status}`);
+		return null;
+	}
+
+	// Persist R2 key to D1 (not the expiring Replicate URL)
+	await queryD1(
+		"UPDATE styles SET thumbnail_url = ?, updated_at = datetime('now') WHERE id = ?",
+		[r2Key, styleId],
+	);
+
+	console.log(`[Thumbnail] Generated for style ${styleId}: ${r2Key}`);
+	return r2Key;
 }

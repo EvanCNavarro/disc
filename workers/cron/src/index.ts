@@ -143,6 +143,39 @@ export default {
 			}
 		}
 
+		if (url.pathname === "/upload" && request.method === "POST") {
+			const authHeader = request.headers.get("Authorization");
+			if (
+				!env.WORKER_AUTH_TOKEN ||
+				!authHeader ||
+				authHeader !== `Bearer ${env.WORKER_AUTH_TOKEN}`
+			) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+
+			const key = url.searchParams.get("key");
+			if (!key) {
+				return Response.json(
+					{ error: "Missing key parameter" },
+					{ status: 400 },
+				);
+			}
+
+			// Only allow styles/ prefix for thumbnail uploads
+			if (!key.startsWith("styles/") || key.includes("..")) {
+				return Response.json({ error: "Invalid key" }, { status: 400 });
+			}
+
+			const imageBytes = await request.arrayBuffer();
+			await env.IMAGES.put(key, imageBytes, {
+				httpMetadata: {
+					contentType: request.headers.get("Content-Type") ?? "image/png",
+				},
+			});
+
+			return Response.json({ key });
+		}
+
 		if (url.pathname === "/image") {
 			const authHeader = request.headers.get("Authorization");
 			if (

@@ -1,6 +1,22 @@
 {
 	"versions": [
 		{
+			"version": "0.8.6",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "layout",
+					"message": "Footer now always pinned to bottom of every page via flex column layout"
+				},
+				{
+					"type": "fix",
+					"scope": "styles",
+					"message": "Persist style thumbnails to R2 instead of storing expiring Replicate URLs"
+				}
+			]
+		},
+		{
 			"version": "0.8.5",
 			"date": "2026-02-17",
 			"entries": [

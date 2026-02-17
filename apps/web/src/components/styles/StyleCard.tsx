@@ -24,7 +24,11 @@ export function StyleCard({ style }: StyleCardProps) {
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
 				{style.thumbnail_url ? (
 					<Image
-						src={style.thumbnail_url}
+						src={
+							style.thumbnail_url.startsWith("styles/")
+								? `/api/images?key=${encodeURIComponent(style.thumbnail_url)}`
+								: style.thumbnail_url
+						}
 						alt={`${style.name} thumbnail`}
 						fill
 						className="object-cover"

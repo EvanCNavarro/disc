@@ -44,10 +44,19 @@ const REPLICATE_TOKEN = process.env.REPLICATE_API_TOKEN;
 const CF_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CF_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const CF_D1_DB_ID = process.env.CLOUDFLARE_D1_DATABASE_ID;
+const WORKER_URL = process.env.DISC_WORKER_URL;
+const WORKER_TOKEN = process.env.WORKER_AUTH_TOKEN;
 
 if (!REPLICATE_TOKEN || !CF_ACCOUNT_ID || !CF_API_TOKEN || !CF_D1_DB_ID) {
 	console.error(
 		"Missing env vars. Need: REPLICATE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN, CLOUDFLARE_D1_DATABASE_ID",
+	);
+	process.exit(1);
+}
+
+if (!WORKER_URL || !WORKER_TOKEN) {
+	console.error(
+		"Missing env vars. Need: DISC_WORKER_URL, WORKER_AUTH_TOKEN",
 	);
 	process.exit(1);
 }
@@ -150,9 +159,36 @@ async function generateImage(style) {
 		throw new Error(`Prediction ${prediction.status}: ${prediction.error}`);
 	}
 
-	return Array.isArray(prediction.output)
+	const replicateUrl = Array.isArray(prediction.output)
 		? prediction.output[0]
 		: prediction.output;
+
+	return replicateUrl;
+}
+
+async function uploadToR2(styleId, replicateUrl) {
+	const r2Key = `styles/${styleId}/thumbnail.png`;
+
+	console.log(`  Downloading image from Replicate...`);
+	const imgResp = await fetch(replicateUrl);
+	if (!imgResp.ok) throw new Error(`Download failed: ${imgResp.status}`);
+	const imageBytes = await imgResp.arrayBuffer();
+
+	console.log(`  Uploading to R2 (${r2Key})...`);
+	const uploadResp = await fetch(
+		`${WORKER_URL}/upload?key=${encodeURIComponent(r2Key)}`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${WORKER_TOKEN}`,
+				"Content-Type": "image/png",
+			},
+			body: imageBytes,
+		},
+	);
+	if (!uploadResp.ok) throw new Error(`R2 upload failed: ${uploadResp.status}`);
+
+	return r2Key;
 }
 
 // ── Main ──
@@ -177,12 +213,13 @@ async function main() {
 
 		console.log(`[GEN] ${style.name}`);
 		try {
-			const imageUrl = await generateImage(style);
+			const replicateUrl = await generateImage(style);
+			const r2Key = await uploadToR2(style.id, replicateUrl);
 			await queryD1(
 				"UPDATE styles SET thumbnail_url = ?, updated_at = datetime('now') WHERE id = ?",
-				[imageUrl, style.id],
+				[r2Key, style.id],
 			);
-			console.log(`  -> ${imageUrl}\n`);
+			console.log(`  -> ${r2Key}\n`);
 			generated++;
 		} catch (err) {
 			console.error(`  [FAIL] ${err.message}\n`);
