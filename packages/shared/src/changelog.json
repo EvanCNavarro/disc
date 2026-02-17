@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.8.3",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "deploy",
+					"message": "Exclude /api/version from auth so CI can verify deployments"
+				}
+			]
+		},
+		{
 			"version": "0.8.2",
 			"date": "2026-02-17",
 			"entries": [
