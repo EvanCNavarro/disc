@@ -19,6 +19,7 @@ import type {
 	PipelineProgress,
 	PipelineStepName,
 	StepData,
+	UsageTriggerSource,
 } from "@disc/shared";
 import {
 	calculateImageCost,
@@ -109,6 +110,13 @@ export async function generateForPlaylist(
 	const analysisId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
 	const startTime = Date.now();
 	const triggerType = options.triggerType ?? "cron";
+	const usedLightExtraction = !!options?.lightExtractionText;
+	const triggerSource: UsageTriggerSource =
+		options?.triggerType === "cron"
+			? "cron"
+			: options?.triggerType === "auto"
+				? "auto_detect"
+				: "user";
 
 	const checkTimeout = () => {
 		if (Date.now() - startTime > PIPELINE_TIMEOUT_MS) {
@@ -131,6 +139,7 @@ export async function generateForPlaylist(
 	let extractTokensOut = 0;
 	let convTokensIn = 0;
 	let convTokensOut = 0;
+	let imageGenerated = false;
 
 	try {
 		// ── Step 1: Create generation record ──
@@ -474,6 +483,7 @@ export async function generateForPlaylist(
 			subject,
 			env.REPLICATE_API_TOKEN,
 		);
+		imageGenerated = true;
 
 		// ── Step 9: Download generated image ──
 		const imageResponse = await fetch(imageUrl);
@@ -643,12 +653,6 @@ export async function generateForPlaylist(
 			.run();
 
 		// 12d-ii. Record usage events for billing
-		const triggerSource =
-			options?.triggerType === "cron"
-				? ("cron" as const)
-				: options?.triggerType === "auto"
-					? ("auto_detect" as const)
-					: ("user" as const);
 
 		// LLM extraction events (one per pipeline run, aggregated tokens)
 		if (extractTokensIn > 0 || extractTokensOut > 0) {
@@ -668,11 +672,13 @@ export async function generateForPlaylist(
 			});
 		}
 
-		// LLM convergence event
+		// LLM convergence / light extraction event
 		if (convTokensIn > 0 || convTokensOut > 0) {
 			await insertUsageEvent(env.DB, {
 				userId: playlist.user_id,
-				actionType: "llm_convergence",
+				actionType: usedLightExtraction
+					? "llm_light_extraction"
+					: "llm_convergence",
 				model: LLM_MODEL,
 				costUsd: costBreakdown.steps[1].cost_usd,
 				generationId,
@@ -726,7 +732,8 @@ export async function generateForPlaylist(
 		// Record failed generation — persist partial cost data if LLM calls were made
 		const totalTokensIn = extractTokensIn + convTokensIn;
 		const totalTokensOut = extractTokensOut + convTokensOut;
-		const hasPartialCost = totalTokensIn > 0 || totalTokensOut > 0;
+		const hasPartialCost =
+			totalTokensIn > 0 || totalTokensOut > 0 || imageGenerated;
 
 		let partialCostBreakdown: string | null = null;
 		let partialCostUsd = 0;
@@ -754,6 +761,15 @@ export async function generateForPlaylist(
 					model: LLM_MODEL,
 					input_tokens: convTokensIn,
 					output_tokens: convTokensOut,
+					cost_usd: cost,
+				});
+				partialCostUsd += cost;
+			}
+			if (imageGenerated) {
+				const cost = calculateImageCost(style.replicate_model);
+				steps.push({
+					step: "image_generation",
+					model: style.replicate_model,
 					cost_usd: cost,
 				});
 				partialCostUsd += cost;
@@ -794,13 +810,6 @@ export async function generateForPlaylist(
 				.run();
 
 			// Record partial usage events for billing (even on failure)
-			const triggerSource =
-				options?.triggerType === "cron"
-					? ("cron" as const)
-					: options?.triggerType === "auto"
-						? ("auto_detect" as const)
-						: ("user" as const);
-
 			if (extractTokensIn > 0 || extractTokensOut > 0) {
 				await insertUsageEvent(env.DB, {
 					userId: playlist.user_id,
@@ -817,6 +826,7 @@ export async function generateForPlaylist(
 					jobId: options?.jobId,
 					tokensIn: extractTokensIn,
 					tokensOut: extractTokensOut,
+					modelUnitCost: MODEL_PRICING[LLM_MODEL]?.inputPerMillion,
 					triggerSource,
 					status: "failed",
 					errorMessage: errorMessage.slice(0, 500),
@@ -826,7 +836,9 @@ export async function generateForPlaylist(
 			if (convTokensIn > 0 || convTokensOut > 0) {
 				await insertUsageEvent(env.DB, {
 					userId: playlist.user_id,
-					actionType: "llm_convergence",
+					actionType: usedLightExtraction
+						? "llm_light_extraction"
+						: "llm_convergence",
 					model: LLM_MODEL,
 					costUsd: calculateLLMCost(LLM_MODEL, convTokensIn, convTokensOut),
 					generationId,
@@ -835,6 +847,25 @@ export async function generateForPlaylist(
 					jobId: options?.jobId,
 					tokensIn: convTokensIn,
 					tokensOut: convTokensOut,
+					modelUnitCost: MODEL_PRICING[LLM_MODEL]?.inputPerMillion,
+					triggerSource,
+					status: "failed",
+					errorMessage: errorMessage.slice(0, 500),
+				});
+			}
+
+			// Record image cost if generation succeeded before failure
+			if (imageGenerated) {
+				await insertUsageEvent(env.DB, {
+					userId: playlist.user_id,
+					actionType: "image_generation",
+					model: style.replicate_model,
+					costUsd: calculateImageCost(style.replicate_model),
+					generationId,
+					playlistId: playlist.id,
+					styleId: style.id,
+					jobId: options?.jobId,
+					modelUnitCost: IMAGE_PRICING[style.replicate_model] ?? 0.04,
 					triggerSource,
 					status: "failed",
 					errorMessage: errorMessage.slice(0, 500),
