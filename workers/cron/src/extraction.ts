@@ -278,6 +278,8 @@ export async function extractThemes(
 
 const CONVERGENCE_SYSTEM_PROMPT = `You are a creative director selecting a single symbolic object to represent a music playlist's cover art.
 
+The playlist's name is a major thematic signal — it represents the creator's intent for the overall collection. Use it to guide your selection. The chosen object should feel aligned with what the playlist name evokes. If the name is abstract or a proper noun, interpret its mood, era, or cultural associations rather than taking it literally.
+
 Given per-track extracted objects and a list of objects already claimed by other playlists (exclusion list), select the best object that:
 1. Represents the playlist's overall mood/theme
 2. Does NOT duplicate any object in the exclusion list
@@ -373,6 +375,7 @@ function buildConvergencePrompt(
 			: "None — this is the first playlist being analyzed.";
 
 	return `Playlist: "${playlistName}"
+Consider what this playlist name evokes — its mood, imagery, and cultural connotations should strongly influence your object selection and aesthetic context.
 
 Per-track extracted objects:
 ${objectSummary}
@@ -420,6 +423,66 @@ export async function convergeAndSelect(
 		result: llmResult.parsed,
 		inputTokens: llmResult.inputTokens,
 		outputTokens: llmResult.outputTokens,
+	};
+}
+
+// ──────────────────────────────────────────────
+// Light extraction (text-based, no tracks)
+// ──────────────────────────────────────────────
+
+const LIGHT_EXTRACTION_SYSTEM_PROMPT = `You are a creative director. Given a text description provided by the user (which may include a subject, mood, scene, or concept), extract a single symbolic object and aesthetic context for playlist cover art.
+
+The object should be:
+- A concrete, visual noun (not an abstract concept)
+- Something that could be rendered as a 3D object or illustration
+- Evocative of the described mood/theme
+
+The aesthetic context should describe:
+- How the object should appear — lighting, composition, texture, atmosphere
+- The mood and feeling the cover art should convey
+
+Respond with JSON:
+{
+  "object": "a specific, visual noun",
+  "aestheticContext": "how this object should appear — mood, lighting, atmosphere, texture",
+  "reasoning": "brief explanation of your interpretation"
+}`;
+
+export async function lightExtract(
+	text: string,
+	playlistName: string,
+	exclusions: DbClaimedObject[],
+	apiKey: string,
+): Promise<{
+	object: string;
+	aestheticContext: string;
+	reasoning: string;
+	inputTokens: number;
+	outputTokens: number;
+}> {
+	const exclusionList =
+		exclusions.length > 0
+			? `\n\nObjects already claimed by other playlists (DO NOT reuse these):\n${exclusions.map((e) => `- ${e.object_name}`).join("\n")}`
+			: "";
+
+	const userPrompt = `Playlist name: "${playlistName}"
+User's description: "${text}"
+${exclusionList}
+
+Extract the best symbolic object and aesthetic context for this playlist's cover art.`;
+
+	const result = await chatCompletionJSON<{
+		object: string;
+		aestheticContext: string;
+		reasoning: string;
+	}>(apiKey, LIGHT_EXTRACTION_SYSTEM_PROMPT, userPrompt, { maxTokens: 500 });
+
+	return {
+		object: result.parsed.object,
+		aestheticContext: result.parsed.aestheticContext,
+		reasoning: result.parsed.reasoning ?? "",
+		inputTokens: result.inputTokens,
+		outputTokens: result.outputTokens,
 	};
 }
 
