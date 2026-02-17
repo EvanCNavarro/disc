@@ -1,6 +1,37 @@
 {
 	"versions": [
 		{
+			"version": "0.12.0",
+			"date": "2026-02-17",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "billing",
+					"message": "Add billing & usage tracking — every AI API call (OpenAI LLM + Replicate image gen) is now logged with cost, tokens, and metadata"
+				},
+				{
+					"type": "feat",
+					"scope": "settings",
+					"message": "Refactor settings into sidebar layout with General and Billing sub-pages"
+				},
+				{
+					"type": "feat",
+					"scope": "billing",
+					"message": "Add stacked bar chart (Recharts) showing daily OpenAI vs Replicate costs with time range selector"
+				},
+				{
+					"type": "feat",
+					"scope": "billing",
+					"message": "Add usage audit table with color-coded action badges, relative timestamps, and pagination"
+				},
+				{
+					"type": "refactor",
+					"scope": "shared",
+					"message": "Move pricing module from worker to shared package for cross-workspace reuse"
+				}
+			]
+		},
+		{
 			"version": "0.11.2",
 			"date": "2026-02-17",
 			"entries": [

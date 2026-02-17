@@ -69,6 +69,7 @@ export function UsageChart({ data }: { data: ChartDataPoint[] }) {
 						fill="none"
 						stroke="currentColor"
 						strokeWidth="1.5"
+						aria-hidden="true"
 					>
 						<path d="M3 3v18h18" strokeLinecap="round" strokeLinejoin="round" />
 						<path
