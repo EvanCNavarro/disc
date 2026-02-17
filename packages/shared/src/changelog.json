@@ -1,6 +1,42 @@
 {
 	"versions": [
 		{
+			"version": "0.10.0",
+			"date": "2026-02-16",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "Live cron/batch progress panel replaces kanban when a job is running — shows pending/in-progress/done columns with per-playlist step tracking"
+				},
+				{
+					"type": "feat",
+					"scope": "queue",
+					"message": "'Next scheduled run' banner with local timezone display when idle"
+				},
+				{
+					"type": "feat",
+					"scope": "nav",
+					"message": "Queue nav icon pulses green when a job is active; hover shows rich tooltip with current playlist, step, and progress"
+				},
+				{
+					"type": "feat",
+					"scope": "dashboard",
+					"message": "Stat cards and generation history table update live during active jobs — no page refresh needed"
+				},
+				{
+					"type": "feat",
+					"scope": "settings",
+					"message": "Time picker auto-detects browser timezone — displays and accepts local time, converts to UTC behind the scenes"
+				},
+				{
+					"type": "feat",
+					"scope": "api",
+					"message": "New GET /api/queue/status endpoint powers global queue awareness via QueueProvider context"
+				}
+			]
+		},
+		{
 			"version": "0.9.0",
 			"date": "2026-02-16",
 			"entries": [
