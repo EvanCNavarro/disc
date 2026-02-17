@@ -1,6 +1,5 @@
 export * from "./changelog";
 export * from "./common-objects";
-export * from "./prompt-builder";
 export * from "./prompt-reconstruction";
 export * from "./styles";
 export * from "./types";

@@ -3,7 +3,7 @@
 > **DISC** = Daily Image Spotify Covers
 > **URL**: `disc.400.dev`
 > **Repo**: `EvanCNavarro/disc`
-> **Version**: 0.1.0
+> **Version**: 0.8.0
 
 ---
 
@@ -16,7 +16,7 @@ DISC generates AI-powered playlist cover art for Spotify. Users authenticate wit
 | Goal | Metric |
 |------|--------|
 | User can generate a cover from any owned playlist | End-to-end in <60s |
-| Generated covers are visually distinct per style | 6 art styles available |
+| Generated covers are visually distinct per style | 5+ art styles, user-creatable |
 | Nightly cron regenerates covers automatically | Zero manual intervention after setup |
 | Costs are tracked and visible | Per-generation cost in dashboard |
 | Images meet Spotify requirements | JPEG, <256KB, uploaded via API |
@@ -43,7 +43,7 @@ DISC generates AI-powered playlist cover art for Spotify. Users authenticate wit
 | **Queue** | CF Queues | — | Per-playlist fan-out with retries. |
 | **Image Compression** | @cf-wasm/photon | 0.1.x | WASM. PNG→JPEG at quality 40. Proven <256KB output. |
 | **AI: Theme** | OpenAI GPT-4o-mini | — | Symbolic object extraction from lyrics/metadata. |
-| **AI: Image** | Replicate Flux Schnell | — | 1024x1024 via LoRA. ~$0.0025/generation. |
+| **AI: Image** | Replicate (Flux 2 Pro, Flux Schnell) | — | 1024x1024. Model per style. ~$0.003–0.05/generation. |
 | **Lyrics** | lyrics.ovh | v1 | Free API. Non-blocking fallback to metadata. |
 | **Styling** | Tailwind CSS | 4.x | PostCSS plugin. CSS custom properties for tokens. |
 | **Linting** | Biome | 2.x | Replaces ESLint + Prettier. Tabs, double quotes. |
@@ -232,14 +232,13 @@ All code must use updated field names:
 
 | # | ID | Name | Description |
 |---|-----|------|-------------|
-| 1 | `bleached-crosshatch` | Bleached Cross-Hatch | High-contrast B&W line art with cross-hatching. Default. |
-| 2 | `vibrant-oil` | Vibrant Oil | Bold, saturated oil painting |
-| 3 | `minimalist-line` | Minimalist Line | Clean line art, single color |
-| 4 | `retro-halftone` | Retro Halftone | Screenprint dots, limited palette |
-| 5 | `neon-noir` | Neon Noir | Dark background with neon accents |
-| 6 | `watercolor-dream` | Watercolor Dream | Soft, bleeding edges |
+| 1 | `bleached-crosshatch` | Bleached Crosshatch | Desaturated cross-hatch illustration, graphite and ink. Default. |
+| 2 | `neon-noir` | Neon Noir | Cinematic noir bathed in neon glow, rain-slicked surfaces |
+| 3 | `soft-watercolor` | Soft Watercolor | Gentle watercolor with soft washes and paper grain |
+| 4 | `ukiyo-e-wave` | Ukiyo-e Wave | Japanese woodblock print with flat color planes |
+| 5 | `kuroginorenjiiro` | Kuro Gin Orenjiiro | Dark low-poly faceted stone with ember-orange rim light (Flux 2 Pro) |
 
-Style 1 is fully defined with Replicate prompt block. Styles 2-6 are added in Phase 3.
+All styles defined in D1 `styles` table with full prompt templates. Users can create custom styles via the style creator.
 
 ---
 

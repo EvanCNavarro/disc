@@ -41,22 +41,6 @@ export const STYLES: Record<string, StyleDefinition> = {
 		promptTemplate:
 			"A delicate watercolor painting of {subject}. Soft translucent washes of color bleeding gently into each other. Visible cold-pressed paper texture and grain showing through. Subtle granulation in pigment settling. Wet-on-wet technique with soft undefined edges. Muted, pastel-adjacent palette with occasional rich pigment concentration. Loose brushwork suggesting form rather than defining it. Gentle ambient light. Ethereal, calming, contemplative. No text, no words, no letters. Square composition.",
 	},
-	"brutalist-collage": {
-		id: "brutalist-collage",
-		name: "Brutalist Collage",
-		description:
-			"Raw mixed-media collage with torn paper, bold typography fragments, and concrete textures",
-		promptTemplate:
-			"A brutalist mixed-media collage of {subject}. Torn paper edges, overlapping layers, raw concrete and newsprint textures. Bold geometric shapes in muted earth tones with occasional red or yellow accent. Visible glue marks and tape strips. Distressed photographic fragments layered with hand-drawn marks. Gritty, industrial, punk-influenced aesthetic. Zine-like rawness with intentional imperfection. High contrast, flat composition with depth from layering. No readable text, no legible words, no letters. Square composition.",
-	},
-	"chromatic-glass": {
-		id: "chromatic-glass",
-		name: "Chromatic Glass",
-		description:
-			"Luminous stained-glass aesthetic with jewel tones, bold black leading lines, and backlit radiance",
-		promptTemplate:
-			"A luminous stained-glass artwork of {subject}. Rich jewel tones — deep sapphire, emerald, ruby, amber — separated by bold black leading lines. Light streaming through from behind, creating a warm backlit radiance. Geometric facets with organic flowing forms. Cathedral-inspired composition with Art Nouveau curves. Translucent color overlaps creating new hues at intersections. Dramatic, reverent, ornate. No text, no words, no letters. Square composition.",
-	},
 	"ukiyo-e-wave": {
 		id: "ukiyo-e-wave",
 		name: "Ukiyo-e Wave",

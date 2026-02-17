@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-02-16
+
+### Added
+- Canonical thumbnails: every style card shows a generated boombox image in that style's aesthetic
+- Style deletion with custom confirmation modal and cascading version cleanup
+- Default style picker in Settings using custom searchable dropdown
+- Style creator → analysis → editor flow: upload images, Claude analyzes, generates heuristics
+- Reusable ConfirmDialog component using native dialog element with destructive variant
+- Custom Dropdown component with keyboard navigation, search filtering, and ARIA support
+
+### Fixed
+- KGO thumbnail now uses Flux 2 Pro model (migration 010 applied to D1)
+- Stale RSC cache after style deletion — added revalidatePath and router.refresh
+
+## [0.7.0] - 2026-02-16
+
+### Added
+- Kuro Gin Orenjiiro style: FLUX LoRA trained on 16 reference images
+- Seed all 7 styles into D1 database
+- Generation history table with stale-while-revalidate caching, cost tracking, and breakdown tooltips
+- Playlist detail page with full analysis transparency
+- Song-level extraction caching via song_extractions table
+- Object scoring with tier weights aggregated into convergence prompt
+- Cost tracking end-to-end: token counts, per-step breakdown, total cost per generation
+
+### Fixed
+- Dark-mode safe colors replacing hardcoded Tailwind green/yellow/red
+- R2 key path validation in image proxy — reject traversal and non-PNG paths
+
+## [0.6.1] - 2026-02-15
+
+### Added
+- Mobile responsive kanban: horizontal snap-scroll below md breakpoint
+- Dynamic footer clearance via ResizeObserver
+- ARIA landmarks: region roles, aria-live progress summary, role=alert on errors
+
+### Fixed
+- Done bucket thumbnails now show generated images instead of original Spotify covers
+- Progress summary hidden when no playlists loaded
+
+### Changed
+- Scale pass: 48px cover art, 24px checkboxes (WCAG 2.5.8), text-sm status labels
+- Color consistency: amber-* replaced with --color-warning tokens
+- Layout fix: viewport-filling dvh-based sizing
+- Footer uses .glass class, safe-area padding for macOS dock
+
+## [0.6.0] - 2026-02-15
+
+### Added
+- Queue page with 3-column kanban board for batch cover generation
+- Batch trigger: select multiple playlists, choose style override, generate all at once
+- Live progress tracking: step-by-step status updates
+- Image review modal with side-by-side comparison and revision notes
+- Worker /trigger endpoint: POST-only with bearer token authentication
+- Revision notes support for iterative refinement
+- New API routes: generate-batch, regenerate, generations, styles
+- Queue nav link and dashboard quick action cards
+
+### Fixed
+- Stale processing detection: playlists stuck >5 minutes auto-reset to idle
+
+### Changed
+- Renamed dall_e_prompt column to prompt (migration 004)
+
 ## [0.5.1] - 2026-02-15
 
 ### Added

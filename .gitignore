@@ -45,8 +45,16 @@ generated_imgs/
 
 # Plan files & design docs
 PLAN-*.md
+BUILDPLAN.md
 docs/archive/
 docs/plans/
+docs/REMAINING-WORK.md
+docs/PRODUCT-OWNER-ANALYSIS.md
 
 # Test/experiment scripts
 scripts/archive/
+scripts/kgo-*.mjs
+scripts/autumnclay-*.mjs
+
+# Refinement logs
+docs/kgo-refinement-log.md
