@@ -39,6 +39,7 @@ export interface SpotifyPlaylist {
 		id: string;
 		display_name: string;
 	};
+	collaborative: boolean;
 }
 
 // ──────────────────────────────────────────────
@@ -190,6 +191,8 @@ export interface DbPlaylist {
 	generation_count: number;
 	style_override: string | null;
 	cron_enabled: boolean;
+	is_collaborative: number;
+	owner_spotify_id: string | null;
 	progress_data: string | null;
 	created_at: string;
 	updated_at: string;

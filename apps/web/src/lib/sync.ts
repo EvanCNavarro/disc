@@ -26,21 +26,26 @@ export async function syncPlaylistsToD1(
 		const coverUrl = playlist.images[0]?.url ?? null;
 		const trackCount = playlist.items.total;
 
+		const isCollaborative = playlist.collaborative ? 1 : 0;
+		const ownerSpotifyId = playlist.owner?.id ?? null;
+
 		if (existingMap.has(playlist.id)) {
 			await queryD1(
-				"UPDATE playlists SET name = ?, description = ?, track_count = ?, spotify_cover_url = ?, updated_at = datetime('now') WHERE user_id = ? AND spotify_playlist_id = ?",
+				"UPDATE playlists SET name = ?, description = ?, track_count = ?, spotify_cover_url = ?, is_collaborative = ?, owner_spotify_id = ?, updated_at = datetime('now') WHERE user_id = ? AND spotify_playlist_id = ?",
 				[
 					playlist.name,
 					playlist.description,
 					trackCount,
 					coverUrl,
+					isCollaborative,
+					ownerSpotifyId,
 					userId,
 					playlist.id,
 				],
 			);
 		} else {
 			await queryD1(
-				"INSERT INTO playlists (user_id, spotify_playlist_id, name, description, track_count, spotify_cover_url) VALUES (?, ?, ?, ?, ?, ?)",
+				"INSERT INTO playlists (user_id, spotify_playlist_id, name, description, track_count, spotify_cover_url, is_collaborative, owner_spotify_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				[
 					userId,
 					playlist.id,
@@ -48,6 +53,8 @@ export async function syncPlaylistsToD1(
 					playlist.description,
 					trackCount,
 					coverUrl,
+					isCollaborative,
+					ownerSpotifyId,
 				],
 			);
 		}
