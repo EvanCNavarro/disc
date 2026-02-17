@@ -466,3 +466,40 @@ export const APLOTOCA = {
 		},
 	},
 } as const;
+
+// ──────────────────────────────────────────────
+// Usage event types (billing/cost tracking)
+// ──────────────────────────────────────────────
+
+/** Row shape for the usage_events D1 table */
+export interface DbUsageEvent {
+	id: string;
+	user_id: string;
+	action_type: string;
+	model: string;
+	generation_id: string | null;
+	playlist_id: string | null;
+	style_id: string | null;
+	job_id: string | null;
+	tokens_in: number | null;
+	tokens_out: number | null;
+	duration_ms: number | null;
+	model_unit_cost: number | null;
+	cost_usd: number;
+	trigger_source: string;
+	status: string;
+	error_message: string | null;
+	created_at: string;
+}
+
+/** Valid action_type values for usage_events */
+export type UsageActionType =
+	| "llm_extraction"
+	| "llm_convergence"
+	| "llm_light_extraction"
+	| "image_generation"
+	| "style_preview"
+	| "style_thumbnail";
+
+/** Valid trigger_source values for usage_events */
+export type UsageTriggerSource = "user" | "cron" | "auto_detect";
