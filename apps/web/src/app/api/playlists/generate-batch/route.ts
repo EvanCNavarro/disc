@@ -4,6 +4,11 @@ import { queryD1 } from "@/lib/db";
 
 const MAX_BATCH_SIZE = 50;
 
+interface PlaylistConfig {
+	playlistId: string;
+	lightExtractionText?: string;
+}
+
 /** POST /api/playlists/generate-batch — trigger generation for multiple playlists */
 export async function POST(request: Request) {
 	const session = await auth();
@@ -13,17 +18,23 @@ export async function POST(request: Request) {
 
 	const body = (await request.json()) as {
 		playlistIds?: string[];
+		playlistConfigs?: PlaylistConfig[];
 		styleId?: string;
 	};
 
-	if (!body.playlistIds || body.playlistIds.length === 0) {
+	// Support both legacy (playlistIds) and new (playlistConfigs) format
+	const configs: PlaylistConfig[] = body.playlistConfigs
+		? body.playlistConfigs
+		: (body.playlistIds ?? []).map((id) => ({ playlistId: id }));
+
+	if (configs.length === 0) {
 		return NextResponse.json(
-			{ error: "playlistIds is required" },
+			{ error: "playlistIds or playlistConfigs is required" },
 			{ status: 400 },
 		);
 	}
 
-	if (body.playlistIds.length > MAX_BATCH_SIZE) {
+	if (configs.length > MAX_BATCH_SIZE) {
 		return NextResponse.json(
 			{ error: `Max ${MAX_BATCH_SIZE} playlists per batch` },
 			{ status: 400 },
@@ -40,7 +51,8 @@ export async function POST(request: Request) {
 	const userId = users[0].id;
 
 	// Validate all playlists belong to this user
-	const placeholders = body.playlistIds.map(() => "?").join(",");
+	const ids = configs.map((c) => c.playlistId);
+	const placeholders = ids.map(() => "?").join(",");
 	const playlists = await queryD1<{
 		id: string;
 		name: string;
@@ -48,34 +60,38 @@ export async function POST(request: Request) {
 		owner_spotify_id: string | null;
 	}>(
 		`SELECT id, name, is_collaborative, owner_spotify_id FROM playlists WHERE id IN (${placeholders}) AND user_id = ?`,
-		[...body.playlistIds, userId],
+		[...ids, userId],
 	);
 
-	if (playlists.length !== body.playlistIds.length) {
+	if (playlists.length !== ids.length) {
 		return NextResponse.json(
 			{ error: "Some playlists not found or not owned by user" },
 			{ status: 400 },
 		);
 	}
 
-	// Filter out collaborative or non-owned playlists (Spotify API rejects cover uploads for these)
-	const eligible = playlists.filter((p) => {
+	// Filter out collaborative or non-owned playlists
+	const eligibleSet = new Set<string>();
+	for (const p of playlists) {
 		if (p.is_collaborative) {
 			console.warn(
 				`[generate-batch] Skipping collaborative playlist "${p.name}" (${p.id})`,
 			);
-			return false;
+			continue;
 		}
 		if (p.owner_spotify_id && p.owner_spotify_id !== session.spotifyId) {
 			console.warn(
 				`[generate-batch] Skipping non-owned playlist "${p.name}" (${p.id}), owner: ${p.owner_spotify_id}`,
 			);
-			return false;
+			continue;
 		}
-		return true;
-	});
+		eligibleSet.add(p.id);
+	}
 
-	if (eligible.length === 0) {
+	const eligibleConfigs = configs.filter((c) => eligibleSet.has(c.playlistId));
+	const skipped = configs.length - eligibleConfigs.length;
+
+	if (eligibleConfigs.length === 0) {
 		return NextResponse.json(
 			{
 				error:
@@ -95,54 +111,54 @@ export async function POST(request: Request) {
 		);
 	}
 
-	const eligibleIds = eligible.map((p) => p.id);
-	const skipped = playlists.length - eligible.length;
+	// Dispatch per-playlist to worker. Each playlist may have different
+	// light_extraction_text, so we make individual calls. The worker marks
+	// playlists as "queued" immediately in setupTrigger, so timeout is a
+	// success case (pipeline keeps running).
+	let succeeded = 0;
+	let failed = 0;
 
-	// Send one trigger with eligible playlist IDs — worker marks them as "queued"
-	// immediately, then processes them sequentially. Use a 15s timeout since
-	// setupTrigger (queuing) is fast but the full pipeline takes minutes.
-	try {
-		const response = await fetch(`${workerUrl}/trigger`, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${workerToken}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				playlist_ids: eligibleIds,
-				style_id: body.styleId,
-				trigger_type: "manual",
-			}),
-			signal: AbortSignal.timeout(15_000),
-		});
-
-		if (response.ok) {
-			return NextResponse.json({
-				total: playlists.length,
-				succeeded: eligible.length,
-				skipped,
-				failed: 0,
+	for (const config of eligibleConfigs) {
+		try {
+			const response = await fetch(`${workerUrl}/trigger`, {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${workerToken}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					playlist_id: config.playlistId,
+					style_id: body.styleId,
+					light_extraction_text: config.lightExtractionText,
+					trigger_type: "manual",
+				}),
+				signal: AbortSignal.timeout(15_000),
 			});
-		}
 
-		const err = await response.text();
-		return NextResponse.json(
-			{ error: `Worker trigger failed: ${err}` },
-			{ status: 502 },
-		);
-	} catch (error) {
-		// TimeoutError = worker is running pipelines (playlists already "queued")
-		if (error instanceof DOMException && error.name === "TimeoutError") {
-			return NextResponse.json({
-				total: playlists.length,
-				succeeded: eligible.length,
-				skipped,
-				failed: 0,
-			});
+			if (response.ok) {
+				succeeded++;
+			} else {
+				// Timeout is a success case — worker already queued the playlist
+				failed++;
+			}
+		} catch (error) {
+			if (error instanceof DOMException && error.name === "TimeoutError") {
+				// Timeout = worker is processing (playlist already queued)
+				succeeded++;
+			} else {
+				console.error(
+					`[generate-batch] Failed to trigger playlist ${config.playlistId}:`,
+					error,
+				);
+				failed++;
+			}
 		}
-		return NextResponse.json(
-			{ error: error instanceof Error ? error.message : "Trigger failed" },
-			{ status: 502 },
-		);
 	}
+
+	return NextResponse.json({
+		total: configs.length,
+		succeeded,
+		skipped,
+		failed,
+	});
 }
