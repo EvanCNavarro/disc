@@ -285,10 +285,21 @@ export function PlaylistDetailClient({
 			{analysis &&
 				analysis.track_extractions.length > 0 &&
 				(() => {
-					// Build lookup from snapshot for enriched metadata
-					const snapshotMap = new Map(
+					// Build lookup from snapshot for enriched metadata.
+					// Spotify names include suffixes like " - Featuring X" or " (Remix)"
+					// that LLM extractions strip. Use exact match first, then prefix match.
+					const snapshotExact = new Map(
 						analysis.track_snapshot.map((t) => [`${t.name}|||${t.artist}`, t]),
 					);
+					const findSnapshot = (trackName: string, artist: string) => {
+						const exact = snapshotExact.get(`${trackName}|||${artist}`);
+						if (exact) return exact;
+						return analysis.track_snapshot.find(
+							(t) =>
+								t.artist === artist &&
+								(t.name.startsWith(trackName) || trackName.startsWith(t.name)),
+						);
+					};
 					return (
 						<section className="flex flex-col gap-[var(--space-md)]">
 							<h2 className="text-lg font-semibold">
@@ -306,9 +317,7 @@ export function PlaylistDetailClient({
 									</thead>
 									<tbody>
 										{analysis.track_extractions.map((te) => {
-											const snap = snapshotMap.get(
-												`${te.trackName}|||${te.artist}`,
-											);
+											const snap = findSnapshot(te.trackName, te.artist);
 											return (
 												<tr
 													key={`${te.trackName}-${te.artist}`}
@@ -316,7 +325,7 @@ export function PlaylistDetailClient({
 												>
 													<td className="py-2 pr-3 font-medium">
 														<div className="flex items-center gap-2 max-w-[12rem]">
-															{snap?.albumImageUrl && (
+															{snap?.albumImageUrl ? (
 																// biome-ignore lint/performance/noImgElement: external Spotify CDN URL
 																<img
 																	src={snap.albumImageUrl}
@@ -324,6 +333,26 @@ export function PlaylistDetailClient({
 																	className="w-8 h-8 shrink-0 rounded-[var(--radius-sm)] object-cover"
 																	loading="lazy"
 																/>
+															) : (
+																<span
+																	className="flex w-8 h-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-surface)]"
+																	aria-hidden="true"
+																>
+																	<svg
+																		width="14"
+																		height="14"
+																		viewBox="0 0 24 24"
+																		fill="none"
+																		stroke="var(--color-text-faint)"
+																		strokeWidth="1.5"
+																		strokeLinecap="round"
+																		strokeLinejoin="round"
+																	>
+																		<path d="M9 18V5l12-2v13" />
+																		<circle cx="6" cy="18" r="3" />
+																		<circle cx="18" cy="16" r="3" />
+																	</svg>
+																</span>
 															)}
 															<span className="truncate">{te.trackName}</span>
 														</div>
