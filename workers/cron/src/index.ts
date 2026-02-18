@@ -32,6 +32,7 @@
 import type { DbStyle } from "@disc/shared";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
 import { fetchUserPlaylists, refreshAccessToken } from "./spotify";
+import { insertWorkerTick } from "./ticks";
 
 export interface Env {
 	DB: D1Database;
@@ -595,8 +596,14 @@ async function watchForNewPlaylists(env: Env): Promise<void> {
 	}
 
 	for (const user of users) {
-		// Skip users with watcher disabled
+		// Skip users with watcher disabled -- log as skipped
 		if (!user.watcher_enabled) {
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "watcher",
+				status: "skipped",
+				startedAt: new Date().toISOString(),
+			});
 			continue;
 		}
 
@@ -605,13 +612,32 @@ async function watchForNewPlaylists(env: Env): Promise<void> {
 			? user.watcher_interval_minutes
 			: 5;
 		if (utcMinute % interval !== 0) {
-			continue;
+			continue; // Interval skip -- don't log (too noisy, happens most ticks)
 		}
+
+		const tickStart = new Date().toISOString();
+		const startMs = Date.now();
 		try {
 			await watchUser(user, env);
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "watcher",
+				status: "success",
+				durationMs: Date.now() - startMs,
+				tokenRefreshed: true,
+				startedAt: tickStart,
+			});
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : "Unknown error";
 			console.error(`[Watcher] Error for user ${user.id}: ${msg}`);
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "watcher",
+				status: "failure",
+				durationMs: Date.now() - startMs,
+				errorMessage: msg,
+				startedAt: tickStart,
+			});
 		}
 	}
 }
