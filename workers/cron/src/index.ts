@@ -161,6 +161,15 @@ export default {
 				// Validate and set playlists to "queued" synchronously
 				const setup = await setupTrigger(env, options);
 
+				await insertWorkerTick(env.DB, {
+					userId: setup.user.id,
+					tickType: options.triggerType === "auto" ? "auto" : "manual",
+					status: "success",
+					playlistsProcessed: setup.playlists.length,
+					tokenRefreshed: !options.accessToken,
+					startedAt: new Date().toISOString(),
+				});
+
 				// Run pipeline in background — ctx.waitUntil() keeps the
 				// worker alive for I/O-bound operations (same pattern as
 				// the scheduled/cron handler). Respond immediately so the
@@ -173,6 +182,12 @@ export default {
 				});
 			} catch (error) {
 				const msg = error instanceof Error ? error.message : "Unknown error";
+				await insertWorkerTick(env.DB, {
+					tickType: "manual",
+					status: "failure",
+					errorMessage: msg,
+					startedAt: new Date().toISOString(),
+				});
 				return Response.json({ error: msg }, { status: 500 });
 			}
 		}
