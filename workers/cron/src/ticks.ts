@@ -13,6 +13,8 @@ interface TickParams {
 	playlistsChecked?: number;
 	playlistsProcessed?: number;
 	tokenRefreshed?: boolean;
+	integrityChecked?: number;
+	integrityFlagged?: number;
 	errorMessage?: string;
 	startedAt: string;
 }
@@ -26,9 +28,10 @@ export async function insertWorkerTick(
 			.prepare(
 				`INSERT INTO worker_ticks
 				 (user_id, tick_type, status, duration_ms, playlists_checked,
-				  playlists_processed, token_refreshed, error_message,
+				  playlists_processed, token_refreshed, integrity_checked,
+				  integrity_flagged, error_message,
 				  started_at, completed_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
 			)
 			.bind(
 				params.userId ?? null,
@@ -38,6 +41,8 @@ export async function insertWorkerTick(
 				params.playlistsChecked ?? null,
 				params.playlistsProcessed ?? null,
 				params.tokenRefreshed ? 1 : 0,
+				params.integrityChecked ?? null,
+				params.integrityFlagged ?? null,
 				params.errorMessage ?? null,
 				params.startedAt,
 			)

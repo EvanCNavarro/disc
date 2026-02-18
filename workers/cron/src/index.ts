@@ -30,6 +30,7 @@
 // and stores it in D1 -> next worker tick picks it up automatically.
 
 import type { DbStyle } from "@disc/shared";
+import { computeAverageHash } from "./image";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
 import { fetchUserPlaylists, refreshAccessToken } from "./spotify";
 import { insertWorkerTick, pruneOldTicks } from "./ticks";
@@ -63,6 +64,57 @@ interface WatchedPlaylistRow {
 	auto_detect_snapshot: string | null;
 	auto_detected_at: string | null;
 	contributor_count: number;
+	last_seen_cover_url: string | null;
+	cover_verified_at: string | null;
+}
+
+/** Spotify's auto-generated 2x2 mosaic covers come from mosaic.scdn.co */
+function isMosaicUrl(url: string | null): boolean {
+	return url != null && url.includes("mosaic.scdn.co");
+}
+
+/**
+ * Fetches a Spotify cover image and computes its perceptual hash.
+ * Returns null if the fetch or hash computation fails.
+ */
+async function fetchSpotifyCoverPhash(
+	imageUrl: string,
+): Promise<string | null> {
+	try {
+		const resp = await fetch(imageUrl);
+		if (!resp.ok) return null;
+		const bytes = new Uint8Array(await resp.arrayBuffer());
+		return computeAverageHash(bytes);
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Resets a playlist for regeneration after cover integrity failure.
+ * Soft-deletes the generation and resets playlist to idle/watching state.
+ */
+async function resetCoverForPlaylist(
+	db: D1Database,
+	playlistId: string,
+	generationId: string,
+): Promise<void> {
+	await db
+		.prepare(`UPDATE generations SET deleted_at = datetime('now') WHERE id = ?`)
+		.bind(generationId)
+		.run();
+
+	await db
+		.prepare(
+			`UPDATE playlists
+			 SET status = 'idle',
+				 auto_detect_status = 'watching',
+				 last_seen_cover_url = NULL,
+				 cover_verified_at = NULL
+			 WHERE id = ?`,
+		)
+		.bind(playlistId)
+		.run();
 }
 
 /** Returns true if the user's cron_time (HH:MM UTC) is within N minutes from now. */
@@ -255,6 +307,26 @@ export default {
 			);
 			headers.set("Cache-Control", "public, max-age=31536000, immutable");
 			return new Response(object.body, { headers });
+		}
+
+		if (url.pathname === "/hash" && request.method === "POST") {
+			const authHeader = request.headers.get("Authorization");
+			if (authHeader !== `Bearer ${env.WORKER_AUTH_TOKEN}`) {
+				return Response.json({ error: "Unauthorized" }, { status: 401 });
+			}
+
+			try {
+				const imageBytes = new Uint8Array(await request.arrayBuffer());
+				const phash = computeAverageHash(imageBytes);
+				return Response.json({ phash });
+			} catch (err) {
+				return Response.json(
+					{
+						error: err instanceof Error ? err.message : "Hash failed",
+					},
+					{ status: 500 },
+				);
+			}
 		}
 
 		return new Response("Not Found", { status: 404 });
@@ -720,13 +792,15 @@ async function watchForNewPlaylists(env: Env): Promise<void> {
 		const tickStart = new Date().toISOString();
 		const startMs = Date.now();
 		try {
-			await watchUser(user, env);
+			const { integrityChecked, integrityFlagged } = await watchUser(user, env);
 			await insertWorkerTick(env.DB, {
 				userId: user.id,
 				tickType: "watcher",
 				status: "success",
 				durationMs: Date.now() - startMs,
 				tokenRefreshed: true,
+				integrityChecked,
+				integrityFlagged,
 				startedAt: tickStart,
 			});
 		} catch (error) {
@@ -744,7 +818,10 @@ async function watchForNewPlaylists(env: Env): Promise<void> {
 	}
 }
 
-async function watchUser(user: UserRow, env: Env): Promise<void> {
+async function watchUser(
+	user: UserRow,
+	env: Env,
+): Promise<{ integrityChecked: number; integrityFlagged: number }> {
 	const accessToken = await refreshAccessToken(
 		user.encrypted_refresh_token,
 		env.ENCRYPTION_KEY,
@@ -758,7 +835,7 @@ async function watchUser(user: UserRow, env: Env): Promise<void> {
 
 	// Get known playlists from D1
 	const knownResult = await env.DB.prepare(
-		`SELECT id, spotify_playlist_id, auto_detect_status, auto_detect_snapshot, auto_detected_at, contributor_count
+		`SELECT id, spotify_playlist_id, auto_detect_status, auto_detect_snapshot, auto_detected_at, contributor_count, last_seen_cover_url, cover_verified_at
 		 FROM playlists WHERE user_id = ? AND deleted_at IS NULL`,
 	)
 		.bind(user.id)
@@ -897,6 +974,70 @@ async function watchUser(user: UserRow, env: Env): Promise<void> {
 			}
 		}
 	}
+
+	// ── Cover Integrity Check ──
+	// For playlists with completed generations, verify Spotify still has our cover
+	let integrityChecked = 0;
+	let integrityFlagged = 0;
+
+	for (const sp of spotifyPlaylists) {
+		const existing = knownMap.get(sp.id);
+		if (!existing) continue;
+
+		// Only check playlists that have a completed, non-deleted generation
+		const gen = await env.DB.prepare(
+			`SELECT g.id, g.cover_phash FROM generations g
+			 WHERE g.playlist_id = ? AND g.status = 'completed' AND g.deleted_at IS NULL
+			 ORDER BY g.created_at DESC LIMIT 1`,
+		)
+			.bind(existing.id)
+			.first<{ id: string; cover_phash: string | null }>();
+
+		if (!gen) continue;
+
+		integrityChecked++;
+
+		// Layer 1: Mosaic detection (cover was removed from Spotify)
+		if (isMosaicUrl(sp.imageUrl)) {
+			console.log(
+				`[Integrity] "${sp.name}" — cover reverted to mosaic, resetting`,
+			);
+			await resetCoverForPlaylist(env.DB, existing.id, gen.id);
+			integrityFlagged++;
+			continue;
+		}
+
+		// Layer 2: URL change detection + phash verification
+		if (sp.imageUrl && sp.imageUrl !== existing.last_seen_cover_url) {
+			if (gen.cover_phash && sp.imageUrl) {
+				const livePhash = await fetchSpotifyCoverPhash(sp.imageUrl);
+				if (livePhash && livePhash !== gen.cover_phash) {
+					console.log(
+						`[Integrity] "${sp.name}" — cover replaced (phash mismatch), resetting`,
+					);
+					await resetCoverForPlaylist(env.DB, existing.id, gen.id);
+					integrityFlagged++;
+					continue;
+				}
+			}
+
+			// Phash matches or no phash yet — update stored URL
+			await env.DB.prepare(
+				`UPDATE playlists SET last_seen_cover_url = ?, cover_verified_at = datetime('now') WHERE id = ?`,
+			)
+				.bind(sp.imageUrl, existing.id)
+				.run();
+		} else if (sp.imageUrl) {
+			// URL unchanged — update verification timestamp
+			await env.DB.prepare(
+				`UPDATE playlists SET cover_verified_at = datetime('now') WHERE id = ?`,
+			)
+				.bind(existing.id)
+				.run();
+		}
+	}
+
+	return { integrityChecked, integrityFlagged };
 }
 
 async function triggerAutoGeneration(
