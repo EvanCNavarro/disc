@@ -32,7 +32,7 @@
 import type { DbStyle } from "@disc/shared";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
 import { fetchUserPlaylists, refreshAccessToken } from "./spotify";
-import { insertWorkerTick } from "./ticks";
+import { insertWorkerTick, pruneOldTicks } from "./ticks";
 
 export interface Env {
 	DB: D1Database;
@@ -91,10 +91,17 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
-		// Single */5 trigger handles both watcher and scheduled cron.
-		// Watcher always runs. Cron runs if a user's HH:MM falls in this 5-min window.
+		// Single every-5-min trigger handles watcher, cron, and daily heartbeat.
 		ctx.waitUntil(watchForNewPlaylists(env));
 		ctx.waitUntil(runScheduledCron(env));
+
+		// Daily heartbeat at midnight UTC: refresh tokens for ALL users
+		// (regardless of cron_enabled/watcher_enabled) to prevent token
+		// revocation from extended inactivity. Also prunes old ticks.
+		const now = new Date();
+		if (now.getUTCHours() === 0 && now.getUTCMinutes() < 5) {
+			ctx.waitUntil(runHeartbeat(env));
+		}
 	},
 
 	async fetch(
@@ -238,6 +245,55 @@ export default {
 		return new Response("Not Found", { status: 404 });
 	},
 };
+
+// Daily heartbeat -- refreshes tokens for ALL users regardless of settings.
+// This prevents Spotify from revoking tokens due to extended inactivity.
+// Also prunes worker_ticks older than 30 days.
+async function runHeartbeat(env: Env): Promise<void> {
+	console.log("[Heartbeat] Running daily token refresh and tick pruning");
+
+	await pruneOldTicks(env.DB);
+
+	const usersResult = await env.DB.prepare(
+		"SELECT id, encrypted_refresh_token FROM users WHERE encrypted_refresh_token IS NOT NULL",
+	).all<{ id: string; encrypted_refresh_token: string }>();
+
+	for (const user of usersResult.results) {
+		const tickStart = new Date().toISOString();
+		const startMs = Date.now();
+		try {
+			await refreshAccessToken(
+				user.encrypted_refresh_token,
+				env.ENCRYPTION_KEY,
+				env.SPOTIFY_CLIENT_ID,
+				env.SPOTIFY_CLIENT_SECRET,
+				env.DB,
+				user.id,
+			);
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "heartbeat",
+				status: "success",
+				durationMs: Date.now() - startMs,
+				tokenRefreshed: true,
+				startedAt: tickStart,
+			});
+			console.log(`[Heartbeat] Token refreshed for user ${user.id}`);
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : "Unknown error";
+			console.error(`[Heartbeat] Failed for user ${user.id}: ${msg}`);
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "heartbeat",
+				status: "failure",
+				durationMs: Date.now() - startMs,
+				tokenRefreshed: false,
+				errorMessage: msg,
+				startedAt: tickStart,
+			});
+		}
+	}
+}
 
 /**
  * Checks if any user's cron_time falls in the current 5-minute window.
