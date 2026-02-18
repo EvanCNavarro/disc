@@ -5,7 +5,12 @@
  * Resizes to 640x640, encodes as JPEG, ensures < 192KB base64.
  */
 
-import { PhotonImage, resize, SamplingFilter } from "@cf-wasm/photon";
+import {
+	grayscale,
+	PhotonImage,
+	resize,
+	SamplingFilter,
+} from "@cf-wasm/photon";
 import { CONFIG } from "@disc/shared";
 
 /**
@@ -57,6 +62,44 @@ export async function compressForSpotify(
 	}
 
 	return uint8ArrayToBase64(jpegBytes);
+}
+
+/**
+ * Computes an average perceptual hash (aHash) for an image.
+ *
+ * 1. Decode image bytes → PhotonImage
+ * 2. Resize to 8×8 with Lanczos3
+ * 3. Convert to grayscale
+ * 4. Extract 64 pixel luminance values
+ * 5. Compute mean → each pixel above mean = 1, below = 0
+ * 6. Return 16-character hex string (64 bits)
+ */
+export function computeAverageHash(imageBytes: Uint8Array): string {
+	const img = PhotonImage.new_from_byteslice(imageBytes);
+	const tiny = resize(img, 8, 8, SamplingFilter.Lanczos3);
+	img.free();
+
+	grayscale(tiny);
+
+	const pixels = tiny.get_raw_pixels();
+	tiny.free();
+
+	// Grayscale pixels: every 4 bytes = [R, G, B, A] where R=G=B
+	const luminances: number[] = [];
+	for (let i = 0; i < pixels.length; i += 4) {
+		luminances.push(pixels[i]);
+	}
+
+	const mean = luminances.reduce((a, b) => a + b, 0) / luminances.length;
+
+	let hash = 0n;
+	for (let i = 0; i < luminances.length; i++) {
+		if (luminances[i] >= mean) {
+			hash |= 1n << BigInt(63 - i);
+		}
+	}
+
+	return hash.toString(16).padStart(16, "0");
 }
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {

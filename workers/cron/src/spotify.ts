@@ -132,6 +132,7 @@ export interface SpotifyPlaylistSummary {
 	ownerId: string;
 	snapshotId: string;
 	trackCount: number;
+	imageUrl: string | null;
 }
 
 /**
@@ -163,6 +164,7 @@ export async function fetchUserPlaylists(
 				collaborative?: boolean;
 				snapshot_id: string;
 				owner: { id: string };
+				images?: Array<{ url: string; width: number; height: number }>;
 				// Feb 2026: "tracks" renamed to "items"
 				items?: { total: number };
 				tracks?: { total: number };
@@ -178,6 +180,7 @@ export async function fetchUserPlaylists(
 				ownerId: raw.owner.id,
 				snapshotId: raw.snapshot_id,
 				trackCount: raw.items?.total ?? raw.tracks?.total ?? 0,
+				imageUrl: raw.images?.[0]?.url ?? null,
 			});
 		}
 
