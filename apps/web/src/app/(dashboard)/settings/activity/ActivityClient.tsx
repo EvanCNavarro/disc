@@ -13,6 +13,8 @@ interface TimelinePoint {
 	durationMs: number | null;
 	playlistsChecked: number | null;
 	playlistsProcessed: number | null;
+	integrityChecked: number | null;
+	integrityFlagged: number | null;
 	tokenRefreshed: boolean;
 	errorMessage: string | null;
 	startedAt: string;
@@ -246,6 +248,17 @@ function TicksTable({
 								</td>
 								<td className="py-2 pr-4 tabular-nums text-[var(--color-text-muted)]">
 									{t.playlistsProcessed ?? "\u2014"}
+									{t.integrityChecked != null && t.integrityChecked > 0 && (
+										<span className="ml-1 text-xs">
+											{t.integrityFlagged != null && t.integrityFlagged > 0 ? (
+												<span className="text-[var(--color-warning)]">
+													({t.integrityFlagged}/{t.integrityChecked} flagged)
+												</span>
+											) : (
+												<span>({t.integrityChecked} verified)</span>
+											)}
+										</span>
+									)}
 								</td>
 								<td className="max-w-[200px] truncate py-2 text-xs text-[var(--color-destructive)]">
 									{t.errorMessage ?? ""}

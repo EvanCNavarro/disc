@@ -11,6 +11,8 @@ interface TickRow {
 	playlists_checked: number | null;
 	playlists_processed: number | null;
 	token_refreshed: number;
+	integrity_checked: number | null;
+	integrity_flagged: number | null;
 	error_message: string | null;
 	started_at: string;
 	completed_at: string | null;
@@ -50,6 +52,8 @@ export async function GET(request: Request) {
 			playlistsChecked: t.playlists_checked,
 			playlistsProcessed: t.playlists_processed,
 			tokenRefreshed: t.token_refreshed === 1,
+			integrityChecked: t.integrity_checked,
+			integrityFlagged: t.integrity_flagged,
 			errorMessage: t.error_message,
 			startedAt: t.started_at,
 			completedAt: t.completed_at,
