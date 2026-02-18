@@ -56,8 +56,11 @@ export async function GET(request: Request) {
 		};
 	});
 
-	// Summary stats
+	// Summary stats — "skipped" ticks are excluded from success rate
+	// since they represent disabled watchers, not failed operations
 	const totalTicks = ticks.length;
+	const skippedCount = ticks.filter((t) => t.status === "skipped").length;
+	const attemptedCount = totalTicks - skippedCount;
 	const successCount = ticks.filter(
 		(t) => t.status === "success" || t.status === "no_work",
 	).length;
@@ -69,6 +72,8 @@ export async function GET(request: Request) {
 		durations.length > 0
 			? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
 			: 0;
+	const minDurationMs = durations.length > 0 ? Math.min(...durations) : null;
+	const maxDurationMs = durations.length > 0 ? Math.max(...durations) : null;
 
 	// Last failure across all time
 	const lastFailureRows = await queryD1<{ created_at: string }>(
@@ -106,13 +111,19 @@ export async function GET(request: Request) {
 		timeline,
 		summary: {
 			totalTicks,
+			attemptedCount,
+			skippedCount,
 			successCount,
 			failureCount,
 			successRate:
-				totalTicks > 0 ? Math.round((successCount / totalTicks) * 100) : 100,
+				attemptedCount > 0
+					? Math.round((successCount / attemptedCount) * 100)
+					: 100,
 			lastFailure,
 			lastHeartbeat,
 			avgDurationMs,
+			minDurationMs,
+			maxDurationMs,
 		},
 		health: {
 			tokenAlive: (recentSuccess[0]?.cnt ?? 0) > 0,

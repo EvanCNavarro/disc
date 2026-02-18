@@ -1,7 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WorkerTimeline } from "@/components/settings/WorkerTimeline";
+import { getTimezoneAbbr } from "@/lib/timezone";
+
+const POLL_INTERVAL_MS = 30_000;
 
 interface TimelinePoint {
 	minuteOfDay: number;
@@ -20,12 +23,16 @@ interface ActivityData {
 	timeline: TimelinePoint[];
 	summary: {
 		totalTicks: number;
+		attemptedCount: number;
+		skippedCount: number;
 		successCount: number;
 		failureCount: number;
 		successRate: number;
 		lastFailure: string | null;
 		lastHeartbeat: string | null;
 		avgDurationMs: number;
+		minDurationMs: number | null;
+		maxDurationMs: number | null;
 	};
 	health: {
 		tokenAlive: boolean;
@@ -39,33 +46,45 @@ function todayUTC(): string {
 	return new Date().toISOString().slice(0, 10);
 }
 
+/** Format an ISO timestamp to local time (e.g. "04:40 PM") */
+function formatTime(iso: string): string {
+	return new Date(iso).toLocaleTimeString("en-US", {
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
 // -- Health status pills --
 
 const HEALTH_ITEMS = [
-	{ key: "tokenAlive", label: "Token" },
-	{ key: "watcherActive", label: "Watcher" },
-	{ key: "cronActive", label: "Cron" },
-	{ key: "heartbeatCurrent", label: "Heartbeat" },
+	{ key: "tokenAlive", label: "Token", critical: true },
+	{ key: "watcherActive", label: "Watcher", critical: false },
+	{ key: "cronActive", label: "Cron", critical: false },
+	{ key: "heartbeatCurrent", label: "Heartbeat", critical: false },
 ] as const;
 
 function HealthBar({ health }: { health: ActivityData["health"] }) {
 	return (
-		<div className="flex flex-wrap gap-[var(--space-sm)]">
-			{HEALTH_ITEMS.map(({ key, label }) => {
+		<div aria-live="polite" className="flex flex-wrap gap-[var(--space-sm)]">
+			{HEALTH_ITEMS.map(({ key, label, critical }) => {
 				const ok = health[key];
+				const dotClass = ok
+					? "bg-[var(--color-accent)]"
+					: critical
+						? "bg-[var(--color-destructive)]"
+						: "bg-[var(--color-text-muted)]";
+				const srLabel = ok ? "(active)" : critical ? "(error)" : "(inactive)";
 				return (
 					<span
 						key={key}
 						className="glass flex items-center gap-1.5 rounded-[var(--radius-pill)] px-3 py-1.5 text-xs font-medium"
 					>
 						<span
-							className={`h-2 w-2 rounded-full ${
-								ok
-									? "bg-[var(--color-accent)]"
-									: "bg-[var(--color-destructive)]"
-							}`}
+							className={`h-2 w-2 rounded-full ${dotClass}`}
+							aria-hidden="true"
 						/>
 						{label}
+						<span className="sr-only">{srLabel}</span>
 					</span>
 				);
 			})}
@@ -76,14 +95,28 @@ function HealthBar({ health }: { health: ActivityData["health"] }) {
 // -- Summary cards --
 
 function SummaryCards({ summary }: { summary: ActivityData["summary"] }) {
+	const durationRange =
+		summary.minDurationMs != null && summary.maxDurationMs != null
+			? `${(summary.minDurationMs / 1000).toFixed(1)}–${(summary.maxDurationMs / 1000).toFixed(1)}s`
+			: null;
+
 	return (
 		<div className="grid grid-cols-1 gap-[var(--space-md)] sm:grid-cols-3">
 			<div className="glass rounded-[var(--radius-lg)] p-[var(--space-md)]">
 				<div className="text-2xl font-bold tabular-nums">
-					{summary.totalTicks}
+					{summary.successCount}
+					<span className="text-base font-normal text-[var(--color-text-muted)]">
+						{" "}
+						/ {summary.attemptedCount}
+					</span>
 				</div>
 				<div className="text-sm text-[var(--color-text-muted)]">
-					Total Ticks
+					Processed
+					{summary.skippedCount > 0 && (
+						<span className="ml-1 text-xs">
+							({summary.skippedCount} skipped)
+						</span>
+					)}
 				</div>
 			</div>
 			<div className="glass rounded-[var(--radius-lg)] p-[var(--space-md)]">
@@ -92,14 +125,24 @@ function SummaryCards({ summary }: { summary: ActivityData["summary"] }) {
 				</div>
 				<div className="text-sm text-[var(--color-text-muted)]">
 					Success Rate
+					{summary.failureCount > 0 && (
+						<span className="ml-1 text-xs text-[var(--color-destructive)]">
+							({summary.failureCount} failed)
+						</span>
+					)}
 				</div>
 			</div>
 			<div className="glass rounded-[var(--radius-lg)] p-[var(--space-md)]">
 				<div className="text-2xl font-bold tabular-nums">
-					{summary.avgDurationMs}ms
+					{summary.avgDurationMs > 0
+						? `${(summary.avgDurationMs / 1000).toFixed(1)}s`
+						: "\u2014"}
 				</div>
 				<div className="text-sm text-[var(--color-text-muted)]">
 					Avg Duration
+					{durationRange && (
+						<span className="ml-1 text-xs">({durationRange})</span>
+					)}
 				</div>
 			</div>
 		</div>
@@ -124,7 +167,13 @@ const TICK_TYPE_LABELS: Record<string, string> = {
 	auto: "Auto",
 };
 
-function TicksTable({ ticks }: { ticks: TimelinePoint[] }) {
+function TicksTable({
+	ticks,
+	tzLabel,
+}: {
+	ticks: TimelinePoint[];
+	tzLabel: string;
+}) {
 	const sorted = [...ticks].reverse();
 
 	return (
@@ -138,7 +187,7 @@ function TicksTable({ ticks }: { ticks: TimelinePoint[] }) {
 					<thead>
 						<tr className="border-b border-[var(--color-border)] text-left text-xs font-medium uppercase tracking-wide text-[var(--color-text-muted)]">
 							<th scope="col" className="pb-2 pr-4">
-								Time
+								Time ({tzLabel})
 							</th>
 							<th scope="col" className="pb-2 pr-4">
 								Type
@@ -164,11 +213,7 @@ function TicksTable({ ticks }: { ticks: TimelinePoint[] }) {
 									className="whitespace-nowrap py-2 pr-4 tabular-nums"
 									title={t.startedAt}
 								>
-									{new Date(t.startedAt).toLocaleTimeString("en-US", {
-										hour: "2-digit",
-										minute: "2-digit",
-										timeZone: "UTC",
-									})}
+									{formatTime(t.startedAt)}
 								</td>
 								<td className="py-2 pr-4">
 									<span
@@ -229,22 +274,45 @@ function TicksTable({ ticks }: { ticks: TimelinePoint[] }) {
 export function ActivityClient() {
 	const [date, setDate] = useState(todayUTC);
 	const [data, setData] = useState<ActivityData | null>(null);
-	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
+	const [tzLabel, setTzLabel] = useState("Local");
+	const initialLoad = useRef(true);
+
+	// Resolve timezone label on mount (client-only)
+	useEffect(() => {
+		setTzLabel(getTimezoneAbbr() || "Local");
+	}, []);
 
 	const fetchData = useCallback(async (d: string) => {
-		setLoading(true);
+		if (initialLoad.current) {
+			initialLoad.current = false;
+		} else {
+			setRefreshing(true);
+		}
 		try {
 			const res = await fetch(`/api/settings/activity?date=${d}`);
 			if (res.ok) {
 				setData(await res.json());
 			}
 		} finally {
-			setLoading(false);
+			setRefreshing(false);
 		}
 	}, []);
 
+	// Fetch on date change
 	useEffect(() => {
 		fetchData(date);
+	}, [date, fetchData]);
+
+	// Auto-poll every 30s when viewing today (historical days are static)
+	useEffect(() => {
+		if (date !== todayUTC()) return;
+
+		const id = setInterval(() => {
+			fetchData(date);
+		}, POLL_INTERVAL_MS);
+
+		return () => clearInterval(id);
 	}, [date, fetchData]);
 
 	const shiftDate = (days: number) => {
@@ -274,6 +342,13 @@ export function ActivityClient() {
 					Worker Timeline
 				</h2>
 				<div className="flex items-center gap-[var(--space-sm)]">
+					{refreshing && (
+						<span
+							role="status"
+							className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)]"
+							aria-label="Refreshing data"
+						/>
+					)}
 					<button
 						type="button"
 						onClick={() => shiftDate(-1)}
@@ -290,7 +365,7 @@ export function ActivityClient() {
 						onClick={() => shiftDate(1)}
 						disabled={date >= todayUTC()}
 						aria-label="Next day"
-						className="rounded-[var(--radius-md)] p-[var(--space-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:opacity-30"
+						className="rounded-[var(--radius-md)] p-[var(--space-sm)] text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] disabled:opacity-40"
 					>
 						&rarr;
 					</button>
@@ -299,16 +374,12 @@ export function ActivityClient() {
 
 			{/* Timeline chart */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-md)]">
-				{loading ? (
+				{!data ? (
 					<div className="flex h-[80px] items-center justify-center text-sm text-[var(--color-text-muted)]">
 						Loading...
 					</div>
-				) : data ? (
-					<WorkerTimeline data={data.timeline} />
 				) : (
-					<div className="flex h-[80px] items-center justify-center text-sm text-[var(--color-text-muted)]">
-						No data
-					</div>
+					<WorkerTimeline data={data.timeline} />
 				)}
 			</section>
 
@@ -316,7 +387,7 @@ export function ActivityClient() {
 			{data && <SummaryCards summary={data.summary} />}
 
 			{/* Recent ticks table */}
-			{data && <TicksTable ticks={data.timeline} />}
+			{data && <TicksTable ticks={data.timeline} tzLabel={tzLabel} />}
 		</div>
 	);
 }

@@ -1,6 +1,52 @@
 {
 	"versions": [
 		{
+			"version": "0.13.1",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Health pills use neutral gray for inactive non-critical services instead of alarming red"
+				},
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Success rate excludes skipped ticks from denominator — disabled watchers no longer deflate the percentage"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Summary cards show processed/attempted ratio, failure count, and duration range in seconds"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Stale-while-revalidate loading — keeps previous data visible with subtle spinner instead of full-page flash"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Activity times display in browser local timezone with abbreviated label (e.g. EST)"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Auto-poll activity data every 30s when viewing today"
+				},
+				{
+					"type": "fix",
+					"scope": "a11y",
+					"message": "Add aria-live, aria-hidden, sr-only labels, and role attributes to health bar, spinner, and tooltip"
+				},
+				{
+					"type": "fix",
+					"scope": "ui",
+					"message": "Remove min-width constraint from timeline chart for mobile responsiveness"
+				}
+			]
+		},
+		{
 			"version": "0.13.0",
 			"date": "2026-02-18",
 			"entries": [

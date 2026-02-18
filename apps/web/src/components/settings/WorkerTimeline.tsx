@@ -74,12 +74,14 @@ function TimelineTooltip({
 		hour: "2-digit",
 		minute: "2-digit",
 		second: "2-digit",
-		timeZone: "UTC",
 	});
 
 	return (
-		<div className="glass rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm shadow-lg">
-			<p className="font-medium">{time} UTC</p>
+		<div
+			role="tooltip"
+			className="glass rounded-[var(--radius-md)] border border-[var(--color-border)] px-3 py-2 text-sm shadow-lg"
+		>
+			<p className="font-medium">{time}</p>
 			<div className="mt-1 space-y-0.5 text-[var(--color-text-muted)]">
 				<p>Type: {TYPE_LABELS[p.tickType] ?? p.tickType}</p>
 				{p.durationMs != null && <p>Duration: {p.durationMs}ms</p>}
@@ -124,39 +126,35 @@ export function WorkerTimeline({ data }: { data: TimelinePoint[] }) {
 
 	return (
 		<>
-			<div className="w-full overflow-x-auto sm:overflow-x-visible">
-				<div className="min-w-[600px] sm:min-w-0">
-					<ResponsiveContainer width="100%" height={80}>
-						<ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-							<CartesianGrid
-								horizontal={false}
-								strokeDasharray="3 3"
-								stroke="var(--color-border)"
-							/>
-							<XAxis
-								dataKey="minuteOfDay"
-								type="number"
-								domain={[0, 1440]}
-								ticks={[0, 360, 720, 1080, 1440]}
-								tickFormatter={(min: number) => {
-									const h = Math.floor(min / 60);
-									return `${h.toString().padStart(2, "0")}:00`;
-								}}
-								tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
-								axisLine={{ stroke: "var(--color-border)" }}
-								tickLine={false}
-							/>
-							<YAxis dataKey="y" hide domain={[0, 2]} />
-							<Tooltip content={<TimelineTooltip />} cursor={false} />
-							<Scatter
-								data={chartData}
-								shape={<TickMark />}
-								isAnimationActive={false}
-							/>
-						</ScatterChart>
-					</ResponsiveContainer>
-				</div>
-			</div>
+			<ResponsiveContainer width="100%" height={80}>
+				<ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+					<CartesianGrid
+						horizontal={false}
+						strokeDasharray="3 3"
+						stroke="var(--color-border)"
+					/>
+					<XAxis
+						dataKey="minuteOfDay"
+						type="number"
+						domain={[0, 1440]}
+						ticks={[0, 360, 720, 1080, 1440]}
+						tickFormatter={(min: number) => {
+							const h = Math.floor(min / 60);
+							return `${h.toString().padStart(2, "0")}:00`;
+						}}
+						tick={{ fill: "var(--color-text-muted)", fontSize: 12 }}
+						axisLine={{ stroke: "var(--color-border)" }}
+						tickLine={false}
+					/>
+					<YAxis dataKey="y" hide domain={[0, 2]} />
+					<Tooltip content={<TimelineTooltip />} cursor={false} />
+					<Scatter
+						data={chartData}
+						shape={<TickMark />}
+						isAnimationActive={false}
+					/>
+				</ScatterChart>
+			</ResponsiveContainer>
 			{/* Screen reader fallback */}
 			<table className="sr-only">
 				<caption>Worker execution timeline</caption>
