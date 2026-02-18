@@ -70,7 +70,7 @@ interface WatchedPlaylistRow {
 
 /** Spotify's auto-generated 2x2 mosaic covers come from mosaic.scdn.co */
 function isMosaicUrl(url: string | null): boolean {
-	return url != null && url.includes("mosaic.scdn.co");
+	return url?.includes("mosaic.scdn.co") ?? false;
 }
 
 /**

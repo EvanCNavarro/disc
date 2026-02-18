@@ -73,7 +73,7 @@ export async function GET() {
 			 WHERE g.playlist_id = p.id AND g.status = 'completed' AND g.deleted_at IS NULL
 			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key,
 			(SELECT g.error_message FROM generations g
-			 WHERE g.playlist_id = p.id AND g.status = 'failed'
+			 WHERE g.playlist_id = p.id AND g.status = 'failed' AND g.deleted_at IS NULL
 			 ORDER BY g.created_at DESC LIMIT 1) AS latest_error_message
 		 FROM playlists p
 		 WHERE p.user_id = ? AND p.deleted_at IS NULL ORDER BY p.name ASC`,
