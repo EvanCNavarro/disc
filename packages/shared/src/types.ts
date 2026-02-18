@@ -503,3 +503,25 @@ export type UsageActionType =
 
 /** Valid trigger_source values for usage_events */
 export type UsageTriggerSource = "user" | "cron" | "auto_detect";
+
+// ──────────────────────────────────────────────
+// Worker tick tracking
+// ──────────────────────────────────────────────
+
+export type TickType = "watcher" | "cron" | "heartbeat" | "manual" | "auto";
+export type TickStatus = "success" | "failure" | "skipped" | "no_work";
+
+export interface DbWorkerTick {
+	id: string;
+	user_id: string | null;
+	tick_type: TickType;
+	status: TickStatus;
+	duration_ms: number | null;
+	playlists_checked: number | null;
+	playlists_processed: number | null;
+	token_refreshed: number;
+	error_message: string | null;
+	started_at: string;
+	completed_at: string | null;
+	created_at: string;
+}
