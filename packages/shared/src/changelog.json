@@ -1,6 +1,37 @@
 {
 	"versions": [
 		{
+			"version": "0.13.0",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "Add worker_ticks table and tick logging for all execution flows (watcher, cron, heartbeat, manual, auto)"
+				},
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "Add daily midnight heartbeat — refreshes Spotify tokens for all users regardless of settings, preventing silent token revocation"
+				},
+				{
+					"type": "feat",
+					"scope": "worker",
+					"message": "Add 30-day automatic tick pruning to keep D1 table small"
+				},
+				{
+					"type": "feat",
+					"scope": "api",
+					"message": "Add /api/settings/activity endpoint with timeline, summary stats, and health indicators"
+				},
+				{
+					"type": "feat",
+					"scope": "ui",
+					"message": "Add Activity tab to settings with 24h timeline chart, health status pills, summary cards, and tick log table"
+				}
+			]
+		},
+		{
 			"version": "0.12.1",
 			"date": "2026-02-17",
 			"entries": [
