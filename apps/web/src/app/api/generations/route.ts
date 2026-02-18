@@ -63,7 +63,7 @@ export async function GET() {
 		 FROM generations g
 		 JOIN playlists p ON g.playlist_id = p.id
 		 LEFT JOIN styles s ON g.style_id = s.id
-		 WHERE g.user_id = ?
+		 WHERE g.user_id = ? AND g.deleted_at IS NULL
 		 ORDER BY g.created_at DESC
 		 LIMIT 100`,
 		[users[0].id],

@@ -65,7 +65,7 @@ async function getDashboardData(spotifyId: string) {
 					[user.id],
 				),
 				queryD1<{ cnt: number }>(
-					`SELECT COUNT(*) as cnt FROM generations WHERE user_id = ? AND status = 'completed'`,
+					`SELECT COUNT(*) as cnt FROM generations WHERE user_id = ? AND status = 'completed' AND deleted_at IS NULL`,
 					[user.id],
 				),
 			]);

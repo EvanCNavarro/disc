@@ -119,10 +119,10 @@ export async function GET() {
 		// Get playlists involved in this job (recently updated)
 		const playlists = await queryD1<PlaylistRow>(
 			`SELECT p.id, p.name, p.spotify_playlist_id, p.status, p.progress_data,
-				(SELECT g.r2_key FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as r2_key,
-				(SELECT g.duration_ms FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as duration_ms,
-				(SELECT g.cost_usd FROM generations g WHERE g.playlist_id = p.id ORDER BY g.created_at DESC LIMIT 1) as cost_usd,
-				(SELECT g.error_message FROM generations g WHERE g.playlist_id = p.id AND g.status = 'failed' ORDER BY g.created_at DESC LIMIT 1) as error_message
+				(SELECT g.r2_key FROM generations g WHERE g.playlist_id = p.id AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as r2_key,
+				(SELECT g.duration_ms FROM generations g WHERE g.playlist_id = p.id AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as duration_ms,
+				(SELECT g.cost_usd FROM generations g WHERE g.playlist_id = p.id AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as cost_usd,
+				(SELECT g.error_message FROM generations g WHERE g.playlist_id = p.id AND g.status = 'failed' AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as error_message
 			FROM playlists p
 			WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status IN ('queued', 'processing', 'generated', 'failed')
 				AND p.updated_at > datetime('now', '-2 hours')

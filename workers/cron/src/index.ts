@@ -424,6 +424,7 @@ async function processUser(
 			     WHERE g.playlist_id = p.id
 			       AND g.style_id = ?
 			       AND g.status = 'completed'
+			       AND g.deleted_at IS NULL
 			       AND g.created_at > ?
 			   )`,
 		)

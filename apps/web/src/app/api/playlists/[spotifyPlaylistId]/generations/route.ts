@@ -61,6 +61,7 @@ export async function GET(
 		 LEFT JOIN styles s ON g.style_id = s.id
 		 WHERE g.playlist_id = ?
 		   AND g.status IN ('completed', 'failed')
+		   AND g.deleted_at IS NULL
 		 ORDER BY g.created_at ASC
 		 LIMIT 20`,
 		[playlists[0].id],

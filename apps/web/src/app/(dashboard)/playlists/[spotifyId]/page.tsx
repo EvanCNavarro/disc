@@ -71,7 +71,7 @@ async function fetchPlaylistDetail(
 	>(
 		`SELECT p.*,
 			(SELECT g.r2_key FROM generations g
-			 WHERE g.playlist_id = p.id AND g.status = 'completed'
+			 WHERE g.playlist_id = p.id AND g.status = 'completed' AND g.deleted_at IS NULL
 			 ORDER BY g.created_at DESC LIMIT 1) AS latest_r2_key
 		 FROM playlists p
 		 WHERE p.spotify_playlist_id = ? AND p.user_id = ? AND p.deleted_at IS NULL`,

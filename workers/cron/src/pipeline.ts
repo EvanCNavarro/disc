@@ -34,7 +34,7 @@ import {
 	extractThemes,
 	lightExtract,
 } from "./extraction";
-import { compressForSpotify } from "./image";
+import { compressForSpotify, computeAverageHash } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
 import { generateImage } from "./replicate";
 import { fetchPlaylistTracks, uploadPlaylistCover } from "./spotify";
@@ -517,6 +517,7 @@ export async function generateForPlaylist(
 		});
 		await tracker.advance("upload");
 		const base64Jpeg = await compressForSpotify(imageBytes);
+		const coverPhash = computeAverageHash(imageBytes);
 		await uploadPlaylistCover(
 			playlist.spotify_playlist_id,
 			base64Jpeg,
@@ -631,7 +632,8 @@ export async function generateForPlaylist(
 				 llm_output_tokens = ?,
 				 image_model = ?,
 				 cost_usd = ?,
-				 cost_breakdown = ?
+				 cost_breakdown = ?,
+				 cover_phash = ?
 			 WHERE id = ?`,
 		)
 			.bind(
@@ -648,6 +650,7 @@ export async function generateForPlaylist(
 				style.replicate_model,
 				costBreakdown.total_usd,
 				JSON.stringify(costBreakdown),
+				coverPhash,
 				generationId,
 			)
 			.run();
