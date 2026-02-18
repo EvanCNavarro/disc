@@ -277,11 +277,37 @@ async function runScheduledCron(env: Env): Promise<void> {
 	console.log(`[Cron] ${users.length} user(s) scheduled in this window`);
 
 	for (const user of users) {
-		await processUser(user, env);
+		const tickStart = new Date().toISOString();
+		const startMs = Date.now();
+		try {
+			const result = await processUser(user, env);
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "cron",
+				status: result.playlistCount > 0 ? "success" : "no_work",
+				durationMs: Date.now() - startMs,
+				playlistsProcessed: result.playlistCount,
+				tokenRefreshed: true,
+				startedAt: tickStart,
+			});
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : "Unknown error";
+			await insertWorkerTick(env.DB, {
+				userId: user.id,
+				tickType: "cron",
+				status: "failure",
+				durationMs: Date.now() - startMs,
+				errorMessage: msg,
+				startedAt: tickStart,
+			});
+		}
 	}
 }
 
-async function processUser(user: UserRow, env: Env): Promise<void> {
+async function processUser(
+	user: UserRow,
+	env: Env,
+): Promise<{ playlistCount: number }> {
 	const jobId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
 
 	try {
@@ -350,7 +376,7 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 			)
 				.bind(jobId)
 				.run();
-			return;
+			return { playlistCount: 0 };
 		}
 
 		console.log(
@@ -397,6 +423,8 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 		console.log(
 			`[Cron] User ${user.id} done: ${completed} completed, ${failed} failed out of ${playlists.length}`,
 		);
+
+		return { playlistCount: playlists.length };
 	} catch (error) {
 		const errorMessage =
 			error instanceof Error ? error.message : "Unknown error";
@@ -407,6 +435,8 @@ async function processUser(user: UserRow, env: Env): Promise<void> {
 		)
 			.bind(jobId)
 			.run();
+
+		throw error;
 	}
 }
 
