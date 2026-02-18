@@ -39,7 +39,17 @@ export async function GET() {
 	return NextResponse.json(settings);
 }
 
-/** PATCH /api/settings/watcher — update watcher enabled/interval */
+/**
+ * PATCH /api/settings/watcher — update watcher enabled/interval
+ *
+ * NOTE: Disabling the watcher is safe as long as the user's scheduled
+ * cron (cron_enabled + cron_time) remains active. The scheduled cron
+ * calls refreshAccessToken() at cron_time, which keeps the Spotify
+ * refresh token alive. If BOTH watcher and scheduled cron are disabled
+ * (cron_enabled = 0), no code path refreshes the token, and Spotify
+ * may revoke it after extended inactivity — requiring the user to
+ * re-authenticate via the web UI. See workers/cron/src/index.ts header.
+ */
 export async function PATCH(request: Request) {
 	const session = await auth();
 	if (!session?.spotifyId) {

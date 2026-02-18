@@ -1,12 +1,33 @@
-/**
- * DISC Cron Worker
- *
- * Two scheduled triggers:
- * - Hourly (0 * * * *): Smart cron — regenerates playlists not on current style
- * - Every 5 min (＊/5 * * * *): Watcher — detects new Spotify playlists, auto-triggers APLOTOCA
- *
- * Also exposes HTTP endpoints: /trigger, /health, /upload, /image
- */
+// DISC Cron Worker
+//
+// Single scheduled trigger (every 5 min) runs two parallel flows:
+// - Watcher: detects new Spotify playlists, auto-triggers APLOTOCA
+// - Scheduled cron: regenerates playlists at user's configured cron_time
+//
+// Also exposes HTTP endpoints: /trigger, /health, /upload, /image
+//
+// -- Token Lifecycle (IMPORTANT) --
+//
+// Spotify access tokens expire after 1 hour, but the worker never
+// persists or reuses them. Every execution calls refreshAccessToken(),
+// which exchanges the long-lived refresh token (stored encrypted in D1)
+// for a brand-new access token. The access token is used once and
+// discarded when the execution ends.
+//
+// This means the 1-hour expiry is irrelevant -- the refresh token is
+// what keeps the system alive. Spotify may revoke a refresh token that
+// hasn't been used for an extended period (~6+ months of zero usage).
+// Each call to refreshAccessToken() resets that clock.
+//
+// CRITICAL: At least one of watcher or scheduled cron must remain
+// active (cron_enabled = 1 on the user) to keep the refresh token
+// alive. If both are disabled and the user doesn't log into the web
+// app, the token will eventually go stale and require manual
+// re-authentication via the web UI.
+//
+// Recovery from a revoked token: user logs in at the web app ->
+// Spotify issues a new refresh token -> signIn() callback encrypts
+// and stores it in D1 -> next worker tick picks it up automatically.
 
 import type { DbStyle } from "@disc/shared";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
