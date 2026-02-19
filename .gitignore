@@ -57,3 +57,6 @@ scripts/autumnclay-*.mjs
 
 # Refinement logs
 docs/kgo-refinement-log.md
+
+# Git worktrees
+.worktrees/
