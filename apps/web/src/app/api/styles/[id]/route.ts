@@ -1,10 +1,11 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
 /** DELETE /api/styles/[id] — permanently deletes a user-created style */
-export async function DELETE(
+export const DELETE = apiRoute(async function DELETE(
 	_request: Request,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
@@ -40,10 +41,10 @@ export async function DELETE(
 	revalidatePath("/settings");
 
 	return NextResponse.json({ success: true });
-}
+});
 
 /** PATCH /api/styles/[id] -- updates style (publish, save heuristics) */
-export async function PATCH(
+export const PATCH = apiRoute(async function PATCH(
 	request: Request,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
@@ -85,4 +86,4 @@ export async function PATCH(
 	await queryD1(`UPDATE styles SET ${updates.join(", ")} WHERE id = ?`, values);
 
 	return NextResponse.json({ success: true });
-}
+});

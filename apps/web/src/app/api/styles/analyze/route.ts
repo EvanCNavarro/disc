@@ -1,6 +1,7 @@
 import type { StyleHeuristics } from "@disc/shared";
 import { reconstructPrompt } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { generateThumbnail } from "@/lib/generate-thumbnail";
@@ -37,7 +38,7 @@ Always include "no text", "no words", "no letters" in constraints.
 Return ONLY valid JSON, no markdown, no explanation.`;
 
 /** POST /api/styles/analyze — analyze reference images via GPT-4o and create a draft style */
-export async function POST(request: Request) {
+export const POST = apiRoute(async function POST(request) {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -178,4 +179,4 @@ export async function POST(request: Request) {
 	);
 
 	return NextResponse.json({ styleId });
-}
+});

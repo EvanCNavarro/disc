@@ -1,5 +1,6 @@
 import type { WatcherSettings } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -12,7 +13,7 @@ interface UserRow {
 const VALID_INTERVALS = [5, 10, 15] as const;
 
 /** GET /api/settings/watcher — returns current watcher settings */
-export async function GET() {
+export const GET = apiRoute(async function GET() {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,7 +38,7 @@ export async function GET() {
 	};
 
 	return NextResponse.json(settings);
-}
+});
 
 /**
  * PATCH /api/settings/watcher — update watcher enabled/interval
@@ -50,7 +51,7 @@ export async function GET() {
  * may revoke it after extended inactivity — requiring the user to
  * re-authenticate via the web UI. See workers/cron/src/index.ts header.
  */
-export async function PATCH(request: Request) {
+export const PATCH = apiRoute(async function PATCH(request) {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -111,4 +112,4 @@ export async function PATCH(request: Request) {
 	);
 
 	return NextResponse.json({ success: true });
-}
+});

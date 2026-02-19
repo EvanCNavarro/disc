@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { useToast } from "@/components/toast";
 import { HeuristicControls } from "./HeuristicControls";
 import { PreviewGrid, type PreviewImage } from "./PreviewGrid";
 import { type VersionEntry, VersionHistory } from "./VersionHistory";
@@ -23,6 +24,7 @@ type EditorStatus =
 
 export function StyleEditor({ style }: { style: DbStyle }) {
 	const router = useRouter();
+	const { addToast } = useToast();
 	const initialHeuristics = useMemo<StyleHeuristics>(() => {
 		if (style.heuristics) {
 			try {
@@ -84,11 +86,12 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 			setPreviewImages((prev) =>
 				prev.map((img) => ({ ...img, loading: false })),
 			);
+			addToast("Failed to generate preview", "error");
 			console.error("Generation failed:", error);
 		} finally {
 			setStatus("idle");
 		}
-	}, [heuristics, subjects, style.id]);
+	}, [heuristics, subjects, style.id, addToast]);
 
 	// New Subjects -- picks 4 new random objects and clears images
 	const handleNewSubjects = useCallback(() => {
@@ -132,17 +135,22 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 				},
 				...prev.map((v) => ({ ...v, isCurrent: false })),
 			]);
+			addToast("Version saved");
 
 			// Regenerate canonical thumbnail in the background
 			fetch(`/api/styles/${style.id}/thumbnail`, { method: "POST" }).catch(
-				(err) => console.error("Thumbnail regeneration failed:", err),
+				(err) => {
+					addToast("Failed to regenerate thumbnail", "error");
+					console.error("Thumbnail regeneration failed:", err);
+				},
 			);
 		} catch (error) {
+			addToast("Failed to save version", "error");
 			console.error("Save failed:", error);
 		} finally {
 			setStatus("idle");
 		}
-	}, [heuristics, previewImages, style.id, versionCounter]);
+	}, [heuristics, previewImages, style.id, versionCounter, addToast]);
 
 	// Publish style
 	const handlePublish = useCallback(async () => {
@@ -159,13 +167,14 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 			});
 
 			if (!response.ok) throw new Error("Publish failed");
-			// Could redirect to /styles or show success message
+			addToast("Style published");
 		} catch (error) {
+			addToast("Failed to publish", "error");
 			console.error("Publish failed:", error);
 		} finally {
 			setStatus("idle");
 		}
-	}, [heuristics, style.id]);
+	}, [heuristics, style.id, addToast]);
 
 	// Delete style
 	const handleDeleteConfirm = useCallback(async () => {
@@ -179,14 +188,16 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 				const data = (await response.json()) as { error?: string };
 				throw new Error(data.error ?? "Delete failed");
 			}
+			addToast("Style deleted");
 			// Invalidate RSC cache then navigate — ensures /styles shows fresh data
 			router.refresh();
 			router.push("/styles");
 		} catch (error) {
+			addToast("Failed to delete", "error");
 			console.error("Delete failed:", error);
 			setStatus("idle");
 		}
-	}, [style.id, router]);
+	}, [style.id, router, addToast]);
 
 	// Load version (placeholder for full implementation)
 	const handleLoadVersion = useCallback(

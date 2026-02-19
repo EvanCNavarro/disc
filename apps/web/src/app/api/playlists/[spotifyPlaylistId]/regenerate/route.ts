@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
 const MAX_NOTES_LENGTH = 500;
 
 /** POST /api/playlists/[spotifyPlaylistId]/regenerate — trigger regeneration for a single playlist */
-export async function POST(
+export const POST = apiRoute(async function POST(
 	request: Request,
 	{ params }: { params: Promise<{ spotifyPlaylistId: string }> },
 ) {
@@ -158,4 +159,4 @@ export async function POST(
 			{ status: 502 },
 		);
 	}
-}
+});

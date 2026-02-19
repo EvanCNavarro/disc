@@ -1,6 +1,7 @@
 import type { DbStyle } from "@disc/shared";
 import { CONFIG, calculateImageCost } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { insertUsageEvent } from "@/lib/usage";
@@ -19,10 +20,8 @@ const POLL_TIMEOUT_MS = CONFIG.REPLICATE_TIMEOUT_MS;
 const MAX_POLL_ERRORS = 3;
 
 /** POST /api/styles/[id]/generate -- triggers 4 parallel Replicate generations using the style's own model config */
-export async function POST(
-	request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
+export const POST = apiRoute(async function POST(request, context) {
+	const { params } = context;
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -224,4 +223,4 @@ export async function POST(
 	}
 
 	return NextResponse.json({ images });
-}
+});

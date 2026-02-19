@@ -1,19 +1,17 @@
 import type { GenerationStatus, GenerationVersion } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
 /** GET /api/playlists/[spotifyPlaylistId]/generations — list generation history for a playlist */
-export async function GET(
-	_request: Request,
-	{ params }: { params: Promise<{ spotifyPlaylistId: string }> },
-) {
+export const GET = apiRoute(async function GET(_request, context) {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	const { spotifyPlaylistId } = await params;
+	const { spotifyPlaylistId } = await context.params;
 
 	const users = await queryD1<{ id: string }>(
 		"SELECT id FROM users WHERE spotify_user_id = ?",
@@ -82,4 +80,4 @@ export async function GET(
 	}));
 
 	return NextResponse.json({ generations });
-}
+});

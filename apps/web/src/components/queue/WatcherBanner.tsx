@@ -7,7 +7,6 @@ interface WatcherBannerProps {
 	onToggle: (enabled: boolean) => void;
 	onIntervalChange: (minutes: number) => void;
 	saving?: boolean;
-	showSaved?: boolean;
 }
 
 const INTERVAL_OPTIONS = [5, 10, 15] as const;
@@ -27,7 +26,6 @@ export function WatcherBanner({
 	onToggle,
 	onIntervalChange,
 	saving,
-	showSaved,
 }: WatcherBannerProps) {
 	const interval = settings.intervalMinutes;
 	const totalSeconds = interval * 60;
@@ -160,12 +158,6 @@ export function WatcherBanner({
 						? "Auto-detect"
 						: "Auto-detect paused"}
 			</span>
-
-			{showSaved && (
-				<span className="text-xs text-[var(--color-success)] animate-fade-out">
-					Saved
-				</span>
-			)}
 
 			{/* Interval dropdown */}
 			{settings.enabled && (

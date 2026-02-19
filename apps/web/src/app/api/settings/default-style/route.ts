@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
 /** PUT /api/settings/default-style — update user's style_preference */
-export async function PUT(request: Request) {
+export const PUT = apiRoute(async function PUT(request) {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -37,4 +38,4 @@ export async function PUT(request: Request) {
 	);
 
 	return NextResponse.json({ success: true });
-}
+});

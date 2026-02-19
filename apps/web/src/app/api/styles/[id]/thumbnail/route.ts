@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { generateThumbnail } from "@/lib/generate-thumbnail";
 
 /** POST /api/styles/[id]/thumbnail — generate canonical thumbnail for a style */
-export async function POST(
-	_request: Request,
-	{ params }: { params: Promise<{ id: string }> },
-) {
+export const POST = apiRoute(async function POST(_request, context) {
+	const { params } = context;
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,4 +44,4 @@ export async function POST(
 	}
 
 	return NextResponse.json({ thumbnailUrl });
-}
+});

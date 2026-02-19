@@ -8,6 +8,7 @@ import type {
 	WatcherSettings,
 } from "@disc/shared";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useToast } from "@/components/toast";
 import { useQueue } from "@/context/QueueContext";
 import { formatCost, formatDuration } from "@/lib/format";
 import { CronIdleBanner } from "./CronIdleBanner";
@@ -157,6 +158,7 @@ function CompletionBanner({
 }
 
 export function QueueBoard() {
+	const { addToast } = useToast();
 	const [playlists, setPlaylists] = useState<PlaylistWithImage[]>([]);
 	const [styles, setStyles] = useState<Style[]>([]);
 	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -323,7 +325,7 @@ export function QueueBoard() {
 				setGenerations(data.generations);
 			}
 		} catch {
-			// Will retry on next poll cycle
+			// Intentionally silent — retries on next poll cycle or modal reopen
 		}
 	}, []);
 
@@ -431,8 +433,13 @@ export function QueueBoard() {
 				throw new Error(message);
 			}
 			await fetchData();
+			addToast(
+				`Generation started for ${configs.length} playlist${configs.length === 1 ? "" : "s"}`,
+			);
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Run failed");
+			const msg = err instanceof Error ? err.message : "Run failed";
+			setError(msg);
+			addToast("Failed to start generation", "error");
 			setScheduledItems(prevScheduled);
 			setPlaylists((prev) =>
 				prev.map((p) =>
@@ -440,7 +447,7 @@ export function QueueBoard() {
 				),
 			);
 		}
-	}, [scheduledItems, styleOverride, fetchData]);
+	}, [scheduledItems, styleOverride, fetchData, addToast]);
 
 	// Unschedule a single item
 	const handleUnschedule = useCallback((playlistId: string) => {
@@ -490,7 +497,6 @@ export function QueueBoard() {
 
 	// Watcher settings handlers
 	const [savingWatcher, setSavingWatcher] = useState(false);
-	const [showWatcherSaved, setShowWatcherSaved] = useState(false);
 
 	const handleWatcherToggle = useCallback(
 		async (enabled: boolean) => {
@@ -502,15 +508,14 @@ export function QueueBoard() {
 					body: JSON.stringify({ enabled }),
 				});
 				await refreshQueue();
-				setShowWatcherSaved(true);
-				setTimeout(() => setShowWatcherSaved(false), 1500);
+				addToast(enabled ? "Auto-detect enabled" : "Auto-detect paused");
 			} catch {
-				// Will sync on next poll
+				addToast("Failed to update auto-detect", "error");
 			} finally {
 				setSavingWatcher(false);
 			}
 		},
-		[refreshQueue],
+		[refreshQueue, addToast],
 	);
 
 	const handleWatcherIntervalChange = useCallback(
@@ -523,15 +528,14 @@ export function QueueBoard() {
 					body: JSON.stringify({ intervalMinutes: minutes }),
 				});
 				await refreshQueue();
-				setShowWatcherSaved(true);
-				setTimeout(() => setShowWatcherSaved(false), 1500);
+				addToast("Watcher settings saved");
 			} catch {
-				// Will sync on next poll
+				addToast("Failed to save settings", "error");
 			} finally {
 				setSavingWatcher(false);
 			}
 		},
-		[refreshQueue],
+		[refreshQueue, addToast],
 	);
 
 	// Retry handler (individual card in Done column)
@@ -551,11 +555,23 @@ export function QueueBoard() {
 				);
 				await fetchData();
 			} catch {
-				// Handled by polling
+				addToast("Failed to retry", "error");
 			}
 		},
-		[playlists, fetchData],
+		[playlists, fetchData, addToast],
 	);
+
+	// Cancel all in-progress/queued items
+	const handleCancelAll = useCallback(async () => {
+		try {
+			const res = await fetch("/api/queue/cancel", { method: "POST" });
+			if (!res.ok) throw new Error("Cancel failed");
+			await fetchData();
+			addToast("Batch cancelled");
+		} catch {
+			addToast("Failed to cancel", "error");
+		}
+	}, [fetchData, addToast]);
 
 	// Modal handlers
 	const handleRerun = useCallback(
@@ -576,10 +592,10 @@ export function QueueBoard() {
 				);
 				await fetchData();
 			} catch {
-				// Error handling via polling
+				addToast("Failed to rerun", "error");
 			}
 		},
-		[modalPlaylist, styleOverride, fetchData],
+		[modalPlaylist, styleOverride, fetchData, addToast],
 	);
 
 	const handleRevise = useCallback(
@@ -601,10 +617,10 @@ export function QueueBoard() {
 				);
 				await fetchData();
 			} catch {
-				// Error handling via polling
+				addToast("Failed to revise", "error");
 			}
 		},
-		[modalPlaylist, styleOverride, fetchData],
+		[modalPlaylist, styleOverride, fetchData, addToast],
 	);
 
 	if (loading) {
@@ -684,7 +700,6 @@ export function QueueBoard() {
 						onToggle={handleWatcherToggle}
 						onIntervalChange={handleWatcherIntervalChange}
 						saving={savingWatcher}
-						showSaved={showWatcherSaved}
 					/>
 
 					{/* Sticky action header — style picker + playlist count + collaborative filter */}
@@ -860,6 +875,17 @@ export function QueueBoard() {
 								title="In Progress"
 								count={inProgress.length}
 								variant="progress"
+								actions={
+									inProgress.length > 0 ? (
+										<button
+											type="button"
+											onClick={handleCancelAll}
+											className="rounded-[var(--radius-pill)] px-2 py-1 text-xs font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-destructive-muted)] hover:text-[var(--color-destructive)] transition-colors"
+										>
+											Cancel All
+										</button>
+									) : undefined
+								}
 							>
 								{inProgress.length === 0 ? (
 									<div
@@ -886,6 +912,7 @@ export function QueueBoard() {
 											lastGeneratedAt={p.last_generated_at}
 											errorMessage={p.latest_error_message}
 											onViewDetails={setModalPlaylistId}
+											onCancel={handleCancelAll}
 										/>
 									))
 								)}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { generateThumbnail } from "@/lib/generate-thumbnail";
@@ -34,7 +35,7 @@ async function persistToR2(
 }
 
 /** POST /api/styles/[id]/versions -- saves a version snapshot */
-export async function POST(
+export const POST = apiRoute(async function POST(
 	request: Request,
 	{ params }: { params: Promise<{ id: string }> },
 ) {
@@ -97,4 +98,4 @@ export async function POST(
 	);
 
 	return NextResponse.json({ versionId });
-}
+});

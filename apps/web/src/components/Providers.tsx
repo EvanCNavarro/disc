@@ -2,6 +2,7 @@
 
 import { SessionProvider } from "next-auth/react";
 import { type ReactNode, useEffect, useRef } from "react";
+import { ToastContainer, ToastProvider } from "@/components/toast";
 import { QueueProvider } from "@/context/QueueContext";
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -38,10 +39,13 @@ function GlobalSync() {
 export function Providers({ children }: { children: ReactNode }) {
 	return (
 		<SessionProvider>
-			<QueueProvider>
-				<GlobalSync />
-				{children}
-			</QueueProvider>
+			<ToastProvider>
+				<QueueProvider>
+					<GlobalSync />
+					{children}
+				</QueueProvider>
+				<ToastContainer />
+			</ToastProvider>
 		</SessionProvider>
 	);
 }

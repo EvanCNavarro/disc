@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/toast";
 import {
 	getTimezoneAbbr,
 	getTimezoneLong,
@@ -19,6 +20,7 @@ export function ScheduleForm({
 	cronEnabled,
 	saveAction,
 }: ScheduleFormProps) {
+	const { addToast } = useToast();
 	const [localTime, setLocalTime] = useState(utcTime);
 	const [tzLabel, setTzLabel] = useState("");
 	const [tzAbbr, setTzAbbr] = useState("");
@@ -37,7 +39,12 @@ export function ScheduleForm({
 		if (formData.get("cron_enabled")) {
 			converted.set("cron_enabled", "on");
 		}
-		await saveAction(converted);
+		try {
+			await saveAction(converted);
+			addToast("Schedule saved");
+		} catch {
+			addToast("Failed to save schedule", "error");
+		}
 	};
 
 	return (

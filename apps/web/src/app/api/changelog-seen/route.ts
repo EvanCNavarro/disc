@@ -1,4 +1,6 @@
 import { APP_VERSION } from "@disc/shared";
+import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -6,10 +8,10 @@ interface UserRow {
 	changelog_last_seen_version: string | null;
 }
 
-export async function GET() {
+export const GET = apiRoute(async function GET() {
 	const session = await auth();
 	if (!session?.spotifyId) {
-		return Response.json({ changelog_last_seen_version: null });
+		return NextResponse.json({ changelog_last_seen_version: null });
 	}
 
 	const rows = await queryD1<UserRow>(
@@ -17,15 +19,15 @@ export async function GET() {
 		[session.spotifyId],
 	);
 
-	return Response.json({
+	return NextResponse.json({
 		changelog_last_seen_version: rows[0]?.changelog_last_seen_version ?? null,
 	});
-}
+});
 
-export async function PATCH(req: Request) {
+export const PATCH = apiRoute(async function PATCH(req) {
 	const session = await auth();
 	if (!session?.spotifyId) {
-		return Response.json({ error: "Unauthorized" }, { status: 401 });
+		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
 	const body = (await req.json()) as { version?: string };
@@ -36,5 +38,5 @@ export async function PATCH(req: Request) {
 		[version, session.spotifyId],
 	);
 
-	return Response.json({ changelog_last_seen_version: version });
-}
+	return NextResponse.json({ changelog_last_seen_version: version });
+});

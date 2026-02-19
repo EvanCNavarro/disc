@@ -557,6 +557,20 @@ async function processUser(
 		};
 
 		for (const playlist of playlists) {
+			// Check if playlist was cancelled while waiting in queue
+			const fresh = await env.DB.prepare(
+				"SELECT status FROM playlists WHERE id = ?",
+			)
+				.bind(playlist.id)
+				.first<{ status: string }>();
+
+			if (!fresh || fresh.status === "idle" || fresh.status === "cancelled") {
+				console.log(
+					`[Cron] Skipping ${playlist.name} — status changed to ${fresh?.status ?? "missing"}`,
+				);
+				continue;
+			}
+
 			const result = await generateForPlaylist(
 				playlist,
 				style,
@@ -571,6 +585,7 @@ async function processUser(
 			}
 		}
 
+		// Only mark completed if job wasn't cancelled while we were running
 		await env.DB.prepare(
 			`UPDATE jobs
 			 SET status = 'completed',
@@ -578,7 +593,7 @@ async function processUser(
 				 completed_playlists = ?,
 				 failed_playlists = ?,
 				 completed_at = datetime('now')
-			 WHERE id = ?`,
+			 WHERE id = ? AND status = 'processing'`,
 		)
 			.bind(playlists.length, completed, failed, jobId)
 			.run();

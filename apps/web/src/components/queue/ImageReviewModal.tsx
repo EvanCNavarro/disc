@@ -292,6 +292,7 @@ function GenerationCard({
 }) {
 	const [promptOpen, setPromptOpen] = useState(false);
 	const isFailed = generation.status === "failed";
+	const isCancelled = generation.status === "cancelled";
 	const imageUrl = generation.r2_key
 		? `/api/images?key=${encodeURIComponent(generation.r2_key)}`
 		: null;
@@ -303,17 +304,25 @@ function GenerationCard({
 		>
 			{/* Label */}
 			<span className="text-xs font-medium text-[var(--color-text-muted)] truncate">
-				{isFailed ? "Failed" : isNewest ? "Current" : generation.style_name}
+				{isCancelled
+					? "Cancelled"
+					: isFailed
+						? "Failed"
+						: isNewest
+							? "Current"
+							: generation.style_name}
 			</span>
 
 			{/* Image or error placeholder */}
 			<div
 				className={
-					isNewest && !isFailed
-						? "ring-2 ring-[var(--color-accent)] rounded-[var(--radius-md)]"
-						: isFailed
-							? "ring-1 ring-[var(--color-destructive)]/30 rounded-[var(--radius-md)]"
-							: ""
+					isCancelled
+						? "ring-1 ring-[var(--color-border)] rounded-[var(--radius-md)]"
+						: isNewest && !isFailed
+							? "ring-2 ring-[var(--color-accent)] rounded-[var(--radius-md)]"
+							: isFailed
+								? "ring-1 ring-[var(--color-destructive)]/30 rounded-[var(--radius-md)]"
+								: ""
 				}
 			>
 				{imageUrl ? (
@@ -328,23 +337,40 @@ function GenerationCard({
 					/>
 				) : (
 					<div
-						className="flex aspect-square w-full items-center justify-center rounded-[var(--radius-md)] bg-[var(--color-destructive)]/5"
+						className={`flex aspect-square w-full items-center justify-center rounded-[var(--radius-md)] ${isCancelled ? "bg-[var(--color-surface)]" : "bg-[var(--color-destructive)]/5"}`}
 						style={{ width: size, height: size }}
 					>
-						<svg
-							width="24"
-							height="24"
-							viewBox="0 0 24 24"
-							fill="none"
-							aria-hidden="true"
-						>
-							<path
-								d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
-								stroke="var(--color-destructive)"
-								strokeWidth="1.5"
-								strokeLinecap="round"
-							/>
-						</svg>
+						{isCancelled ? (
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								aria-hidden="true"
+							>
+								<path
+									d="M18 6L6 18M6 6l12 12"
+									stroke="var(--color-text-faint)"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+								/>
+							</svg>
+						) : (
+							<svg
+								width="24"
+								height="24"
+								viewBox="0 0 24 24"
+								fill="none"
+								aria-hidden="true"
+							>
+								<path
+									d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
+									stroke="var(--color-destructive)"
+									strokeWidth="1.5"
+									strokeLinecap="round"
+								/>
+							</svg>
+						)}
 					</div>
 				)}
 			</div>

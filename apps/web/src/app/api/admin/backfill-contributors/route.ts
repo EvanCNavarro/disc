@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -14,7 +15,7 @@ interface SpotifyTracksPage {
 }
 
 /** POST /api/admin/backfill-contributors — backfill contributor data for all playlists */
-export async function POST() {
+export const POST = apiRoute(async function POST() {
 	const session = await auth();
 	if (!session?.spotifyId || session.spotifyId !== "evancnavarro") {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -125,4 +126,4 @@ export async function POST() {
 	}
 
 	return NextResponse.json({ backfilled: results.length, results });
-}
+});

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -10,7 +11,7 @@ interface StyleRow {
 }
 
 /** GET /api/styles — list all available styles */
-export async function GET() {
+export const GET = apiRoute(async function GET() {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -33,4 +34,4 @@ export async function GET() {
 	);
 
 	return NextResponse.json({ styles });
-}
+});

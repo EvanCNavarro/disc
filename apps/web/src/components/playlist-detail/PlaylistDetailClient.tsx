@@ -13,6 +13,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useToast } from "@/components/toast";
 import {
 	formatCost,
 	formatDuration,
@@ -105,6 +106,7 @@ export function PlaylistDetailClient({
 	isCollaborative = false,
 }: PlaylistDetailClientProps) {
 	const router = useRouter();
+	const { addToast } = useToast();
 	const [generating, setGenerating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const isProcessing =
@@ -126,10 +128,13 @@ export function PlaylistDetailClient({
 				const data = await res.json();
 				throw new Error(data.error || "Generation failed");
 			}
+			addToast("Generation started");
 			// Revalidate server component data without full page reload
 			router.refresh();
 		} catch (err) {
-			setError(err instanceof Error ? err.message : "Unknown error");
+			const msg = err instanceof Error ? err.message : "Unknown error";
+			setError(msg);
+			addToast(msg, "error");
 			setGenerating(false);
 		}
 	}
@@ -474,7 +479,11 @@ function GenerationCard({ generation }: { generation: Generation }) {
 						/>
 					) : (
 						<div className="w-full h-full flex items-center justify-center text-[var(--color-text-faint)] text-xs">
-							{generation.status === "failed" ? "!" : "..."}
+							{generation.status === "failed"
+								? "!"
+								: generation.status === "cancelled"
+									? "\u2715"
+									: "..."}
 						</div>
 					)}
 				</div>

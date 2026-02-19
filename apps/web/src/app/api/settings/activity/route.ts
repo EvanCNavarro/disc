@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -19,7 +20,7 @@ interface TickRow {
 	created_at: string;
 }
 
-export async function GET(request: Request) {
+export const GET = apiRoute(async function GET(request) {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -138,4 +139,4 @@ export async function GET(request: Request) {
 			heartbeatCurrent: (recentHeartbeat[0]?.cnt ?? 0) > 0,
 		},
 	});
-}
+});

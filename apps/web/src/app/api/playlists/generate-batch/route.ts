@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -10,7 +11,7 @@ interface PlaylistConfig {
 }
 
 /** POST /api/playlists/generate-batch — trigger generation for multiple playlists */
-export async function POST(request: Request) {
+export const POST = apiRoute(async function POST(request) {
 	try {
 		const session = await auth();
 		if (!session?.spotifyId) {
@@ -185,4 +186,4 @@ export async function POST(request: Request) {
 		console.error("[generate-batch] Unhandled error:", message);
 		return NextResponse.json({ error: message }, { status: 500 });
 	}
-}
+});

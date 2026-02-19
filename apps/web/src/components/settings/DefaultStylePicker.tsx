@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useTransition } from "react";
 import { Dropdown, type DropdownOption } from "@/components/Dropdown";
+import { useToast } from "@/components/toast";
 
 interface DefaultStylePickerProps {
 	styles: Array<{ id: string; name: string }>;
@@ -13,8 +14,8 @@ export function DefaultStylePicker({
 	currentValue,
 }: DefaultStylePickerProps) {
 	const [value, setValue] = useState(currentValue);
-	const [saved, setSaved] = useState(false);
 	const [isPending, startTransition] = useTransition();
+	const { addToast } = useToast();
 
 	const options: DropdownOption[] = styles.map((s) => ({
 		value: s.id,
@@ -29,11 +30,12 @@ export function DefaultStylePicker({
 				body: JSON.stringify({ styleId: value }),
 			});
 			if (response.ok) {
-				setSaved(true);
-				setTimeout(() => setSaved(false), 2000);
+				addToast("Default style saved");
+			} else {
+				addToast("Failed to save default style", "error");
 			}
 		});
-	}, [value]);
+	}, [value, addToast]);
 
 	return (
 		<div className="flex flex-col gap-[var(--space-md)]">
@@ -49,7 +51,7 @@ export function DefaultStylePicker({
 				disabled={isPending || value === currentValue}
 				className="self-start rounded-[var(--radius-pill)] bg-[var(--color-accent)] px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-[var(--color-accent-hover)] disabled:opacity-50"
 			>
-				{isPending ? "Saving..." : saved ? "Saved" : "Save Default Style"}
+				{isPending ? "Saving..." : "Save Default Style"}
 			</button>
 		</div>
 	);

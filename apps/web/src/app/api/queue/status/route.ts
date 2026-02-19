@@ -1,5 +1,6 @@
 import type { QueueStatus } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -74,7 +75,7 @@ function parseStepFromProgress(progressData: string | null): {
 }
 
 /** GET /api/queue/status — polling endpoint for global queue awareness */
-export async function GET() {
+export const GET = apiRoute(async function GET() {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -204,7 +205,7 @@ export async function GET() {
 			`SELECT id, type, total_playlists, completed_playlists, failed_playlists,
 				total_cost_usd, started_at, completed_at
 			FROM jobs
-			WHERE user_id = ? AND status IN ('completed', 'failed')
+			WHERE user_id = ? AND status IN ('completed', 'failed', 'cancelled')
 				AND completed_at > datetime('now', '-1 hour')
 			ORDER BY completed_at DESC LIMIT 1`,
 			[user.id],
@@ -256,4 +257,4 @@ export async function GET() {
 		watcherSettings,
 	};
 	return NextResponse.json(status);
-}
+});

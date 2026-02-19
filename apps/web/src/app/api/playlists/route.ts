@@ -1,5 +1,6 @@
 import type { DbPlaylist } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 import { fetchUserPlaylists } from "@/lib/spotify";
@@ -8,7 +9,7 @@ import { syncPlaylistsToD1 } from "@/lib/sync";
 const STALE_PROCESSING_MINUTES = 15;
 
 /** GET /api/playlists — fetch user's playlists from D1 */
-export async function GET() {
+export const GET = apiRoute(async function GET() {
 	const session = await auth();
 	if (!session?.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -56,7 +57,7 @@ export async function GET() {
 	// Also clean up orphaned generation records (worker crashed before error handler ran)
 	await queryD1(
 		`UPDATE generations
-		 SET status = 'failed', error_message = 'Worker terminated unexpectedly'
+		 SET status = 'failed', error_message = 'Generation timed out — worker did not respond within ${STALE_PROCESSING_MINUTES} minutes'
 		 WHERE user_id = ? AND status = 'processing'
 		   AND created_at < datetime('now', ?)`,
 		[userId, `-${STALE_PROCESSING_MINUTES} minutes`],
@@ -102,10 +103,10 @@ export async function GET() {
 	}
 
 	return NextResponse.json({ playlists, counts });
-}
+});
 
 /** POST /api/playlists — sync playlists from Spotify to D1 */
-export async function POST() {
+export const POST = apiRoute(async function POST() {
 	const session = await auth();
 	if (!session?.accessToken || !session.spotifyId) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -119,4 +120,4 @@ export async function POST() {
 		console.error("Playlist sync failed:", error);
 		return NextResponse.json({ error: "Sync failed" }, { status: 500 });
 	}
-}
+});

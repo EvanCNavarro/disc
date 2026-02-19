@@ -5,11 +5,12 @@ import type {
 	TrackExtraction,
 } from "@disc/shared";
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
 /** GET /api/analyses/[analysisId] — full analysis detail for a generation */
-export async function GET(
+export const GET = apiRoute(async function GET(
 	_request: Request,
 	{ params }: { params: Promise<{ analysisId: string }> },
 ) {
@@ -79,4 +80,4 @@ export async function GET(
 	}
 
 	return NextResponse.json({ analysis });
-}
+});

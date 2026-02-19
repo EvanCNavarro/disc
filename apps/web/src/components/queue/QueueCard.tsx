@@ -46,6 +46,7 @@ interface QueueCardProps {
 	onViewImage?: (id: string) => void;
 	onViewDetails?: (id: string) => void;
 	onRetry?: (id: string) => void;
+	onCancel?: (id: string) => void;
 }
 
 export function QueueCard({
@@ -66,6 +67,7 @@ export function QueueCard({
 	onViewImage,
 	onViewDetails,
 	onRetry,
+	onCancel,
 }: QueueCardProps) {
 	const [coverLoaded, setCoverLoaded] = useState(false);
 	let progress: PipelineProgress | null = null;
@@ -299,6 +301,17 @@ export function QueueCard({
 				{/* Actions */}
 				{!locked && (
 					<div className="flex shrink-0 gap-[var(--space-xs)]">
+						{(status === "processing" || status === "queued") &&
+							!scheduleConfig &&
+							onCancel && (
+								<button
+									type="button"
+									onClick={() => onCancel(id)}
+									className="rounded-[var(--radius-pill)] px-3 py-1.5 text-sm font-medium text-[var(--color-text-muted)] hover:bg-[var(--color-destructive-muted)] hover:text-[var(--color-destructive)] transition-colors"
+								>
+									Cancel
+								</button>
+							)}
 						{status === "processing" && onViewDetails && (
 							<button
 								type="button"

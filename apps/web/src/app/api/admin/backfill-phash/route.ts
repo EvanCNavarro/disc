@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiRoute } from "@/lib/api-route";
 import { auth } from "@/lib/auth";
 import { queryD1 } from "@/lib/db";
 
@@ -11,7 +12,7 @@ interface GenerationRow {
 }
 
 /** POST /api/admin/backfill-phash — compute phash for all existing generations */
-export async function POST() {
+export const POST = apiRoute(async function POST() {
 	const session = await auth();
 	if (!session?.spotifyId || session.spotifyId !== "evancnavarro") {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -133,4 +134,4 @@ export async function POST() {
 		errors: errors.slice(0, 20),
 		urlsSeeded: seeded,
 	});
-}
+});

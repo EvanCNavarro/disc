@@ -14,7 +14,7 @@ export function useChangelogSeen() {
 				setLastSeenVersion(data.changelog_last_seen_version);
 			})
 			.catch(() => {
-				// Silently fail — user just won't see the indicator
+				// Intentionally silent — changelog dot is non-critical UI decoration
 			})
 			.finally(() => setIsLoading(false));
 	}, []);
@@ -28,7 +28,7 @@ export function useChangelogSeen() {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ version: APP_VERSION }),
 		}).catch(() => {
-			// Best-effort persistence
+			// Intentionally silent — best-effort persistence, no user impact if fails
 		});
 	}, []);
 
