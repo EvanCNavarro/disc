@@ -4,15 +4,39 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ImageUpload } from "./ImageUpload";
 
-const toBase64 = (file: File): Promise<string> =>
+/** Max dimension for resized images — keeps total payload under Vercel's 4.5MB body limit */
+const MAX_DIMENSION = 1024;
+const JPEG_QUALITY = 0.8;
+
+/** Resize image to fit within MAX_DIMENSION and return as base64 JPEG */
+const toBase64 = (file: File): Promise<{ base64: string; type: string }> =>
 	new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => {
-			const result = reader.result as string;
-			resolve(result.split(",")[1]); // Strip data:image/...;base64, prefix
+		const img = new Image();
+		img.onload = () => {
+			let { width, height } = img;
+			if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+				const scale = MAX_DIMENSION / Math.max(width, height);
+				width = Math.round(width * scale);
+				height = Math.round(height * scale);
+			}
+			const canvas = document.createElement("canvas");
+			canvas.width = width;
+			canvas.height = height;
+			const ctx = canvas.getContext("2d");
+			if (!ctx) {
+				reject(new Error("Canvas context unavailable"));
+				return;
+			}
+			ctx.drawImage(img, 0, 0, width, height);
+			const dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+			resolve({
+				base64: dataUrl.split(",")[1],
+				type: "image/jpeg",
+			});
+			URL.revokeObjectURL(img.src);
 		};
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
+		img.onerror = reject;
+		img.src = URL.createObjectURL(file);
 	});
 
 export function StyleCreator() {
@@ -32,12 +56,7 @@ export function StyleCreator() {
 		setStatus("analyzing");
 
 		try {
-			const imageData = await Promise.all(
-				images.map(async (file) => ({
-					base64: await toBase64(file),
-					type: file.type,
-				})),
-			);
+			const imageData = await Promise.all(images.map(toBase64));
 
 			const response = await fetch("/api/styles/analyze", {
 				method: "POST",
@@ -46,10 +65,17 @@ export function StyleCreator() {
 			});
 
 			if (!response.ok) {
-				const body = await response.json().catch(() => null);
-				const message =
-					(body as { error?: string } | null)?.error ??
-					"Analysis failed. Please try again.";
+				let message = `Analysis failed (${response.status}). Please try again.`;
+				try {
+					const body = (await response.json()) as { error?: string };
+					if (body.error) message = body.error;
+				} catch {
+					// Non-JSON response (e.g., Vercel body size limit)
+					if (response.status === 413) {
+						message =
+							"Images are too large. Try removing some or using smaller files.";
+					}
+				}
 				setError(message);
 				setStatus("idle");
 				return;
@@ -88,7 +114,10 @@ export function StyleCreator() {
 					{/* Reference Images */}
 					<div>
 						<p className="mb-[var(--space-xs)] text-sm font-medium">
-							Reference Images
+							Reference Images{" "}
+							<span className="font-normal text-[var(--color-text-muted)]">
+								{images.length} / 5
+							</span>
 						</p>
 						<ImageUpload images={images} onChange={setImages} maxImages={5} />
 					</div>

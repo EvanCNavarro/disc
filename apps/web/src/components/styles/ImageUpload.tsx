@@ -123,29 +123,33 @@ export function ImageUpload({
 				className="hidden"
 			/>
 
-			{/* Thumbnails */}
-			{images.length > 0 && (
-				<div className="grid grid-cols-5 gap-[var(--space-sm)]">
-					{images.map((file, i) => (
-						<div key={`${file.name}-${file.size}`} className="relative">
-							{/* biome-ignore lint/performance/noImgElement: File blob URLs incompatible with next/image */}
-							<img
-								src={URL.createObjectURL(file)}
-								alt={file.name}
-								className="aspect-square w-full rounded-[var(--radius-sm)] object-cover"
-							/>
-							<button
-								type="button"
-								onClick={() => removeImage(i)}
-								className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
-								aria-label={`Remove ${file.name}`}
-							>
-								&times;
-							</button>
-						</div>
-					))}
-				</div>
-			)}
+			{/* Thumbnails + empty slot placeholders */}
+			<div className="grid grid-cols-5 gap-[var(--space-sm)]">
+				{images.map((file, i) => (
+					<div key={`${file.name}-${file.size}`} className="relative">
+						{/* biome-ignore lint/performance/noImgElement: File blob URLs incompatible with next/image */}
+						<img
+							src={URL.createObjectURL(file)}
+							alt={file.name}
+							className="aspect-square w-full rounded-[var(--radius-sm)] object-cover"
+						/>
+						<button
+							type="button"
+							onClick={() => removeImage(i)}
+							className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white hover:bg-black/80"
+							aria-label={`Remove ${file.name}`}
+						>
+							&times;
+						</button>
+					</div>
+				))}
+				{Array.from({ length: maxImages - images.length }, (_, i) => (
+					<div
+						key={`slot-${images.length + i}`}
+						className="aspect-square w-full rounded-[var(--radius-sm)] border-2 border-dashed border-[var(--color-border)]/40"
+					/>
+				))}
+			</div>
 		</div>
 	);
 }
