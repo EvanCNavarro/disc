@@ -32,7 +32,7 @@
 import type { DbStyle } from "@disc/shared";
 import {
 	compressForSpotify,
-	computeAverageHash,
+	computePerceptualHash,
 	hammingDistance,
 	PHASH_MATCH_THRESHOLD,
 } from "./image";
@@ -80,6 +80,9 @@ function isMosaicUrl(url: string | null): boolean {
 
 /**
  * Fetches a Spotify cover image and computes its perceptual hash.
+ * Normalizes via compressForSpotify() first so the hash is computed
+ * on the same format as our stored hash (640x640 JPEG), eliminating
+ * format/resolution differences from Spotify's CDN re-encoding.
  * Returns null if the fetch or hash computation fails.
  */
 async function fetchSpotifyCoverPhash(
@@ -89,7 +92,11 @@ async function fetchSpotifyCoverPhash(
 		const resp = await fetch(imageUrl);
 		if (!resp.ok) return null;
 		const bytes = new Uint8Array(await resp.arrayBuffer());
-		return computeAverageHash(bytes);
+		// Normalize: compress to our standard format before hashing,
+		// matching the pipeline's hash computation path exactly
+		const base64Jpeg = await compressForSpotify(bytes);
+		const jpegBytes = Uint8Array.from(atob(base64Jpeg), (c) => c.charCodeAt(0));
+		return computePerceptualHash(jpegBytes);
 	} catch {
 		return null;
 	}
@@ -105,7 +112,9 @@ async function resetCoverForPlaylist(
 	generationId: string,
 ): Promise<void> {
 	await db
-		.prepare(`UPDATE generations SET deleted_at = datetime('now') WHERE id = ?`)
+		.prepare(
+			`UPDATE generations SET deleted_at = datetime('now', 'utc') WHERE id = ?`,
+		)
 		.bind(generationId)
 		.run();
 
@@ -327,7 +336,7 @@ export default {
 				const jpegBytes = Uint8Array.from(atob(base64Jpeg), (c) =>
 					c.charCodeAt(0),
 				);
-				const phash = computeAverageHash(jpegBytes);
+				const phash = computePerceptualHash(jpegBytes);
 				return Response.json({ phash });
 			} catch (err) {
 				return Response.json(
@@ -974,6 +983,22 @@ async function watchUser(
 				if (user.cron_time && isCronWithinMinutes(user.cron_time, 10)) {
 					console.log(
 						`[Watcher] "${sp.name}" ready but cron at ${user.cron_time} UTC is within 10 min — deferring`,
+					);
+					continue;
+				}
+
+				// Skip if playlist already generated today (prevents cron/auto double-trigger)
+				const todayGen = await env.DB.prepare(
+					`SELECT 1 FROM generations
+					 WHERE playlist_id = ? AND DATE(created_at) = DATE('now', 'utc')
+					 AND status IN ('pending', 'completed', 'processing') AND deleted_at IS NULL`,
+				)
+					.bind(existing.id)
+					.first();
+
+				if (todayGen) {
+					console.log(
+						`[Watcher] "${sp.name}" already generated today — skipping`,
 					);
 					continue;
 				}

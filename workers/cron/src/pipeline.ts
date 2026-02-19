@@ -34,7 +34,7 @@ import {
 	extractThemes,
 	lightExtract,
 } from "./extraction";
-import { compressForSpotify, computeAverageHash } from "./image";
+import { compressForSpotify, computePerceptualHash } from "./image";
 import { fetchLyricsBatch } from "./lyrics";
 import { generateImage } from "./replicate";
 import { fetchPlaylistTracks, uploadPlaylistCover } from "./spotify";
@@ -519,7 +519,7 @@ export async function generateForPlaylist(
 		const base64Jpeg = await compressForSpotify(imageBytes);
 		// Hash the compressed JPEG (what Spotify actually receives), not the raw Replicate output
 		const jpegBytes = Uint8Array.from(atob(base64Jpeg), (c) => c.charCodeAt(0));
-		const coverPhash = computeAverageHash(jpegBytes);
+		const coverPhash = computePerceptualHash(jpegBytes);
 		await uploadPlaylistCover(
 			playlist.spotify_playlist_id,
 			base64Jpeg,

@@ -6,6 +6,8 @@ interface WatcherBannerProps {
 	settings: { enabled: boolean; intervalMinutes: number };
 	onToggle: (enabled: boolean) => void;
 	onIntervalChange: (minutes: number) => void;
+	saving?: boolean;
+	showSaved?: boolean;
 }
 
 const INTERVAL_OPTIONS = [5, 10, 15] as const;
@@ -24,6 +26,8 @@ export function WatcherBanner({
 	settings,
 	onToggle,
 	onIntervalChange,
+	saving,
+	showSaved,
 }: WatcherBannerProps) {
 	const interval = settings.intervalMinutes;
 	const totalSeconds = interval * 60;
@@ -86,7 +90,8 @@ export function WatcherBanner({
 			<button
 				type="button"
 				onClick={() => onToggle(!settings.enabled)}
-				className="flex shrink-0 items-center justify-center rounded-[var(--radius-md)] p-0.5 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)]"
+				disabled={saving}
+				className={`flex shrink-0 items-center justify-center rounded-[var(--radius-md)] p-0.5 text-[var(--color-text-muted)] transition-colors hover:text-[var(--color-text)] ${saving ? "pointer-events-none opacity-50" : ""}`}
 				aria-label={
 					settings.enabled ? "Pause auto-detect" : "Resume auto-detect"
 				}
@@ -149,8 +154,18 @@ export function WatcherBanner({
 			</svg>
 
 			<span className="text-xs text-[var(--color-text-muted)]">
-				{settings.enabled ? "Auto-detect" : "Auto-detect paused"}
+				{saving
+					? "Saving..."
+					: settings.enabled
+						? "Auto-detect"
+						: "Auto-detect paused"}
 			</span>
+
+			{showSaved && (
+				<span className="text-xs text-[var(--color-success)] animate-fade-out">
+					Saved
+				</span>
+			)}
 
 			{/* Interval dropdown */}
 			{settings.enabled && (
@@ -158,7 +173,8 @@ export function WatcherBanner({
 					<button
 						type="button"
 						onClick={() => setDropdownOpen((prev) => !prev)}
-						className="rounded-[var(--radius-md)] px-1.5 py-0.5 text-xs text-[var(--color-text-faint)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text-muted)]"
+						disabled={saving}
+						className={`rounded-[var(--radius-md)] px-1.5 py-0.5 text-xs text-[var(--color-text-faint)] transition-colors hover:bg-[var(--color-surface)] hover:text-[var(--color-text-muted)] ${saving ? "pointer-events-none opacity-50" : ""}`}
 					>
 						{interval}m
 						<svg

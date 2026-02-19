@@ -1,14 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 
 // Mock @cf-wasm/photon since it requires WASM runtime (Workers only)
-const mockPixels = new Uint8Array(64 * 4); // 64 pixels, RGBA
-// Set up a pattern: first 32 pixels bright (200), last 32 dark (50)
-for (let i = 0; i < 64; i++) {
-	const val = i < 32 ? 200 : 50;
-	mockPixels[i * 4] = val; // R
-	mockPixels[i * 4 + 1] = val; // G
-	mockPixels[i * 4 + 2] = val; // B
-	mockPixels[i * 4 + 3] = 255; // A
+// pHash resizes to 32×32 = 1024 pixels, RGBA (4096 bytes)
+const N = 32;
+const mockPixels = new Uint8Array(N * N * 4);
+
+// Set up a gradient pattern: pixel luminance = row * 8 + col
+// This produces a predictable 2D gradient for DCT testing
+for (let row = 0; row < N; row++) {
+	for (let col = 0; col < N; col++) {
+		const i = (row * N + col) * 4;
+		const val = Math.min(255, row * 8 + col);
+		mockPixels[i] = val; // R
+		mockPixels[i + 1] = val; // G
+		mockPixels[i + 2] = val; // B
+		mockPixels[i + 3] = 255; // A
+	}
 }
 
 const mockPhotonImage = {
@@ -26,38 +33,50 @@ vi.mock("@cf-wasm/photon", () => ({
 }));
 
 // Must import AFTER mock setup
-const { computeAverageHash, hammingDistance, PHASH_MATCH_THRESHOLD } =
+const { computePerceptualHash, hammingDistance, PHASH_MATCH_THRESHOLD } =
 	await import("../image");
 
-describe("computeAverageHash", () => {
+describe("computePerceptualHash (pHash/DCT)", () => {
 	it("returns a 16-character hex string", () => {
-		const hash = computeAverageHash(new Uint8Array([1, 2, 3]));
+		const hash = computePerceptualHash(new Uint8Array([1, 2, 3]));
 		expect(hash).toMatch(/^[0-9a-f]{16}$/);
 	});
 
 	it("returns the same hash for identical input", () => {
 		const input = new Uint8Array([1, 2, 3]);
-		const hash1 = computeAverageHash(input);
-		const hash2 = computeAverageHash(input);
+		const hash1 = computePerceptualHash(input);
+		const hash2 = computePerceptualHash(input);
 		expect(hash1).toBe(hash2);
 	});
 
-	it("produces expected hash for known pixel pattern", () => {
-		// First 32 pixels = 200 (above mean of 125), last 32 = 50 (below mean)
-		// Expected: first 32 bits = 1, last 32 bits = 0
-		// = 0xffffffff00000000
-		const hash = computeAverageHash(new Uint8Array([1, 2, 3]));
-		expect(hash).toBe("ffffffff00000000");
+	it("produces a non-zero hash for gradient pattern", () => {
+		const hash = computePerceptualHash(new Uint8Array([1, 2, 3]));
+		// DCT of a gradient should produce non-trivial frequency content
+		expect(hash).not.toBe("0000000000000000");
+	});
+
+	it("produces hash with expected bit distribution", () => {
+		const hash = computePerceptualHash(new Uint8Array([1, 2, 3]));
+		// Count set bits — for a gradient pattern, roughly half should be set
+		const bigint = BigInt(`0x${hash}`);
+		let bits = 0;
+		let val = bigint;
+		while (val > 0n) {
+			bits += Number(val & 1n);
+			val >>= 1n;
+		}
+		// DC bit is always 0, so 63 AC bits compared to median → ~31 set
+		expect(bits).toBeGreaterThan(15);
+		expect(bits).toBeLessThan(49);
 	});
 });
 
 describe("hammingDistance", () => {
 	it("returns 0 for identical hashes", () => {
-		expect(hammingDistance("ffffffff00000000", "ffffffff00000000")).toBe(0);
+		expect(hammingDistance("ffffffffffffffff", "ffffffffffffffff")).toBe(0);
 	});
 
 	it("returns 1 for single-bit difference", () => {
-		// 0x0000000000000001 vs 0x0000000000000000
 		expect(hammingDistance("0000000000000001", "0000000000000000")).toBe(1);
 	});
 
@@ -72,7 +91,7 @@ describe("hammingDistance", () => {
 });
 
 describe("PHASH_MATCH_THRESHOLD", () => {
-	it("is set to 25", () => {
-		expect(PHASH_MATCH_THRESHOLD).toBe(25);
+	it("is set to 10", () => {
+		expect(PHASH_MATCH_THRESHOLD).toBe(10);
 	});
 });

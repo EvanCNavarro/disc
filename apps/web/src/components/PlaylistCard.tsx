@@ -1,8 +1,11 @@
+"use client";
+
 import type { SpotifyPlaylist } from "@disc/shared";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { MusicNote01Icon } from "@hugeicons-pro/core-stroke-rounded";
 import Image from "next/image";
 import Link from "next/link";
+import { useState } from "react";
 
 interface PlaylistCardProps {
 	playlist: SpotifyPlaylist;
@@ -11,6 +14,7 @@ interface PlaylistCardProps {
 export function PlaylistCard({ playlist }: PlaylistCardProps) {
 	const coverUrl = playlist.images[0]?.url;
 	const trackCount = playlist.items.total;
+	const [coverLoaded, setCoverLoaded] = useState(false);
 
 	return (
 		<Link
@@ -19,13 +23,19 @@ export function PlaylistCard({ playlist }: PlaylistCardProps) {
 		>
 			<div className="relative aspect-square w-full overflow-hidden bg-[var(--color-surface)]">
 				{coverUrl ? (
-					<Image
-						src={coverUrl}
-						alt={`Cover art for ${playlist.name}`}
-						fill
-						sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
-						className="object-cover"
-					/>
+					<>
+						{!coverLoaded && (
+							<div className="absolute inset-0 animate-pulse bg-[var(--color-border)]" />
+						)}
+						<Image
+							src={coverUrl}
+							alt={`Cover art for ${playlist.name}`}
+							fill
+							sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 20vw"
+							className={`object-cover transition-opacity duration-300 ${coverLoaded ? "opacity-100" : "opacity-0"}`}
+							onLoad={() => setCoverLoaded(true)}
+						/>
+					</>
 				) : (
 					<div className="flex h-full w-full items-center justify-center text-[var(--color-text-muted)]">
 						<HugeiconsIcon icon={MusicNote01Icon} size={48} strokeWidth={1} />

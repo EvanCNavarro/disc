@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useQueue } from "@/context/QueueContext";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
@@ -41,7 +42,7 @@ interface GenerationRow {
 }
 
 type StatusFilter = "all" | "completed" | "failed" | "pending" | "processing";
-type TriggerFilter = "all" | "manual" | "cron";
+type TriggerFilter = "all" | "manual" | "auto" | "cron";
 
 const STATUS_OPTIONS: StatusFilter[] = [
 	"all",
@@ -50,8 +51,14 @@ const STATUS_OPTIONS: StatusFilter[] = [
 	"processing",
 	"pending",
 ];
-const TRIGGER_OPTIONS: TriggerFilter[] = ["all", "manual", "cron"];
+const TRIGGER_OPTIONS: TriggerFilter[] = ["all", "manual", "auto", "cron"];
 const PAGE_SIZE = 20;
+
+const TRIGGER_LABELS: Record<string, string> = {
+	manual: "Manual",
+	cron: "Scheduled",
+	auto: "Auto-detect",
+};
 
 const STEP_LABELS: Record<string, string> = {
 	extract_themes: "Extract Themes",
@@ -267,7 +274,10 @@ function FilterGroup<T extends string>({
 							: "bg-[var(--color-surface)] text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
 					}`}
 				>
-					{opt === "all" ? "All" : opt.charAt(0).toUpperCase() + opt.slice(1)}
+					{opt === "all"
+						? "All"
+						: (TRIGGER_LABELS[opt] ??
+							opt.charAt(0).toUpperCase() + opt.slice(1))}
 				</button>
 			))}
 		</div>
@@ -275,10 +285,11 @@ function FilterGroup<T extends string>({
 }
 
 function TriggerIcon({ type }: { type: string }) {
+	const cls = "inline-block h-3.5 w-3.5";
 	if (type === "cron") {
 		return (
 			<svg
-				className="inline-block h-3.5 w-3.5"
+				className={cls}
 				fill="none"
 				viewBox="0 0 24 24"
 				stroke="currentColor"
@@ -290,9 +301,28 @@ function TriggerIcon({ type }: { type: string }) {
 			</svg>
 		);
 	}
+	if (type === "auto") {
+		return (
+			<svg
+				className={cls}
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				strokeWidth={2}
+				strokeLinecap="round"
+				aria-hidden="true"
+			>
+				<path d="M2 12C2 6.5 6.5 2 12 2" />
+				<path d="M5 12c0-3.87 3.13-7 7-7" />
+				<path d="M8 12a4 4 0 0 1 4-4" />
+				<circle cx="12" cy="12" r="1" fill="currentColor" />
+			</svg>
+		);
+	}
+	// manual — cursor click
 	return (
 		<svg
-			className="inline-block h-3.5 w-3.5"
+			className={cls}
 			fill="none"
 			viewBox="0 0 24 24"
 			stroke="currentColor"
@@ -304,67 +334,57 @@ function TriggerIcon({ type }: { type: string }) {
 	);
 }
 
-function CostTooltip({
-	breakdown,
-	flipUp,
-}: {
-	breakdown: CostBreakdown;
-	flipUp?: boolean;
-}) {
+function CostTooltipContent({ breakdown }: { breakdown: CostBreakdown }) {
 	return (
-		<div
-			role="tooltip"
-			className={`glass absolute ${flipUp ? "bottom-full mb-1" : "top-full mt-1"} right-0 z-50 min-w-[20rem] rounded-[var(--radius-md)] p-[var(--space-md)] text-xs shadow-[var(--shadow-lg)]`}
-		>
-			<table className="w-full">
-				<thead>
-					<tr className="text-left text-[var(--color-text-faint)] uppercase tracking-wide">
-						<th className="pb-1.5 pr-3 font-medium">Step</th>
-						<th className="pb-1.5 pr-3 font-medium">Model</th>
-						<th className="pb-1.5 text-right font-medium">Cost</th>
-					</tr>
-				</thead>
-				<tbody className="divide-y divide-[var(--color-border-subtle)]">
-					{breakdown.steps.map((s) => (
-						<tr key={s.step}>
-							<td className="py-1.5 pr-3">
-								<span className="font-medium">
-									{STEP_LABELS[s.step] ?? s.step}
-								</span>
-								{s.input_tokens != null && s.output_tokens != null && (
-									<div className="text-[var(--color-text-faint)] mt-0.5">
-										{formatTokens(s.input_tokens)} in &middot;{" "}
-										{formatTokens(s.output_tokens)} out
-									</div>
-								)}
-							</td>
-							<td className="py-1.5 pr-3 text-[var(--color-text-muted)] max-w-[8rem] truncate">
-								{shortenModel(s.model)}
-							</td>
-							<td className="py-1.5 text-right font-mono">
-								{formatCost(s.cost_usd)}
-							</td>
-						</tr>
-					))}
-				</tbody>
-				<tfoot>
-					<tr className="border-t border-[var(--color-border)]">
-						<td colSpan={2} className="pt-1.5 pr-3 font-semibold">
-							Total
+		<table className="w-full">
+			<thead>
+				<tr className="text-left text-[var(--color-text-faint)] uppercase tracking-wide">
+					<th className="pb-1.5 pr-3 font-medium">Step</th>
+					<th className="pb-1.5 pr-3 font-medium">Model</th>
+					<th className="pb-1.5 text-right font-medium">Cost</th>
+				</tr>
+			</thead>
+			<tbody className="divide-y divide-[var(--color-border-subtle)]">
+				{breakdown.steps.map((s) => (
+					<tr key={s.step}>
+						<td className="py-1.5 pr-3">
+							<span className="font-medium">
+								{STEP_LABELS[s.step] ?? s.step}
+							</span>
+							{s.input_tokens != null && s.output_tokens != null && (
+								<div className="text-[var(--color-text-faint)] mt-0.5">
+									{formatTokens(s.input_tokens)} in &middot;{" "}
+									{formatTokens(s.output_tokens)} out
+								</div>
+							)}
 						</td>
-						<td className="pt-1.5 text-right font-mono font-semibold">
-							{formatCost(breakdown.total_usd)}
+						<td className="py-1.5 pr-3 text-[var(--color-text-muted)] max-w-[8rem] truncate">
+							{shortenModel(s.model)}
+						</td>
+						<td className="py-1.5 text-right font-mono">
+							{formatCost(s.cost_usd)}
 						</td>
 					</tr>
-				</tfoot>
-			</table>
-		</div>
+				))}
+			</tbody>
+			<tfoot>
+				<tr className="border-t border-[var(--color-border)]">
+					<td colSpan={2} className="pt-1.5 pr-3 font-semibold">
+						Total
+					</td>
+					<td className="pt-1.5 text-right font-mono font-semibold">
+						{formatCost(breakdown.total_usd)}
+					</td>
+				</tr>
+			</tfoot>
+		</table>
 	);
 }
 
 function CostCell({ row }: { row: GenerationRow }) {
 	const [show, setShow] = useState(false);
 	const [flipUp, setFlipUp] = useState(false);
+	const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
 	const btnRef = useRef<HTMLButtonElement>(null);
 	const breakdown = parseCostBreakdown(row.cost_breakdown);
 
@@ -379,14 +399,18 @@ function CostCell({ row }: { row: GenerationRow }) {
 	function handleShow() {
 		if (btnRef.current) {
 			const rect = btnRef.current.getBoundingClientRect();
-			// Flip tooltip above if less than 200px to viewport bottom
-			setFlipUp(window.innerHeight - rect.bottom < 200);
+			const flip = window.innerHeight - rect.bottom < 200;
+			setFlipUp(flip);
+			setPos({
+				top: flip ? rect.top - 8 : rect.bottom + 8,
+				right: window.innerWidth - rect.right,
+			});
 		}
 		setShow(true);
 	}
 
 	return (
-		<td className="py-2.5 pr-3 text-[var(--color-text-muted)] relative">
+		<td className="py-2.5 pr-3 text-[var(--color-text-muted)]">
 			<button
 				ref={btnRef}
 				type="button"
@@ -400,11 +424,23 @@ function CostCell({ row }: { row: GenerationRow }) {
 			>
 				{formatCost(row.cost_usd)}
 			</button>
-			{show && (
-				<div id={`cost-tip-${row.id}`}>
-					<CostTooltip breakdown={breakdown} flipUp={flipUp} />
-				</div>
-			)}
+			{show &&
+				pos &&
+				createPortal(
+					<div
+						id={`cost-tip-${row.id}`}
+						role="tooltip"
+						className="glass fixed z-50 min-w-[20rem] rounded-[var(--radius-md)] p-[var(--space-md)] text-xs shadow-[var(--shadow-lg)]"
+						style={{
+							top: flipUp ? undefined : pos.top,
+							bottom: flipUp ? window.innerHeight - pos.top : undefined,
+							right: pos.right,
+						}}
+					>
+						<CostTooltipContent breakdown={breakdown} />
+					</div>,
+					document.body,
+				)}
 		</td>
 	);
 }
@@ -496,6 +532,39 @@ function ExpandedDetails({ row }: { row: GenerationRow }) {
 	);
 }
 
+function CoverThumb({
+	r2Key,
+	size = 8,
+}: {
+	r2Key: string | null;
+	size?: number;
+}) {
+	const [loaded, setLoaded] = useState(false);
+	const sizeClass = size === 8 ? "h-8 w-8" : "h-12 w-12";
+
+	return (
+		<div
+			className={`relative ${sizeClass} shrink-0 rounded-[var(--radius-sm)] overflow-hidden bg-[var(--color-surface)]`}
+		>
+			{r2Key ? (
+				<>
+					{!loaded && (
+						<div className="absolute inset-0 animate-pulse bg-[var(--color-border)]" />
+					)}
+					{/* biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image */}
+					<img
+						src={`/api/images?key=${encodeURIComponent(r2Key)}`}
+						alt=""
+						className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
+						onLoad={() => setLoaded(true)}
+						loading="lazy"
+					/>
+				</>
+			) : null}
+		</div>
+	);
+}
+
 function DesktopRow({
 	row,
 	expanded,
@@ -523,17 +592,7 @@ function DesktopRow({
 				className="cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
 			>
 				<td className="py-2.5 pr-2 w-10">
-					{row.r2_key ? (
-						// biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image
-						<img
-							src={`/api/images?key=${encodeURIComponent(row.r2_key)}`}
-							alt=""
-							className="h-8 w-8 rounded-[var(--radius-sm)] object-cover"
-							loading="lazy"
-						/>
-					) : (
-						<div className="h-8 w-8 rounded-[var(--radius-sm)] bg-[var(--color-surface)]" />
-					)}
+					<CoverThumb r2Key={row.r2_key} />
 				</td>
 				<td className="py-2.5 pr-3 max-w-[12rem] truncate">
 					{row.playlist_name}
@@ -549,7 +608,7 @@ function DesktopRow({
 				<td className="py-2.5 pr-3">
 					<span className="inline-flex items-center gap-1 text-[var(--color-text-muted)]">
 						<TriggerIcon type={row.trigger_type} />
-						{row.trigger_type}
+						{TRIGGER_LABELS[row.trigger_type] ?? row.trigger_type}
 					</span>
 				</td>
 				<td className="py-2.5 pr-3">
@@ -590,17 +649,7 @@ function MobileRow({
 				className="flex w-full items-center justify-between py-3 text-left"
 			>
 				<div className="flex items-center gap-2.5 min-w-0">
-					{row.r2_key ? (
-						// biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image
-						<img
-							src={`/api/images?key=${encodeURIComponent(row.r2_key)}`}
-							alt=""
-							className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] object-cover"
-							loading="lazy"
-						/>
-					) : (
-						<div className="h-8 w-8 shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]" />
-					)}
+					<CoverThumb r2Key={row.r2_key} />
 					<div className="flex flex-col gap-0.5 min-w-0">
 						<span className="text-sm font-medium truncate">
 							{row.playlist_name}

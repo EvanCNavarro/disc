@@ -2,7 +2,6 @@
 
 import type { PipelineProgress, PipelineStepName } from "@disc/shared";
 import { APLOTOCA } from "@disc/shared";
-import Image from "next/image";
 import { useState } from "react";
 import { Dropdown, type DropdownOption } from "@/components/Dropdown";
 import { formatRelative } from "@/lib/format";
@@ -82,6 +81,7 @@ export function QueueCard({
 	onViewDetails,
 	onRetry,
 }: QueueCardProps) {
+	const [coverLoaded, setCoverLoaded] = useState(false);
 	let progress: PipelineProgress | null = null;
 	if (progressData) {
 		try {
@@ -250,18 +250,23 @@ export function QueueCard({
 				) : null}
 
 				{/* Cover thumbnail */}
-				{coverUrl ? (
-					<Image
-						src={coverUrl}
-						alt=""
-						width={48}
-						height={48}
-						className="h-12 w-12 shrink-0 rounded-[var(--radius-sm)] object-cover"
-						unoptimized
-					/>
-				) : (
-					<div className="h-12 w-12 shrink-0 rounded-[var(--radius-sm)] bg-[var(--color-surface)]" />
-				)}
+				<div className="relative h-12 w-12 shrink-0 rounded-[var(--radius-sm)] overflow-hidden bg-[var(--color-surface)]">
+					{coverUrl ? (
+						<>
+							{!coverLoaded && (
+								<div className="absolute inset-0 animate-pulse bg-[var(--color-border)]" />
+							)}
+							{/* biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image */}
+							<img
+								src={coverUrl}
+								alt=""
+								className={`h-full w-full object-cover transition-opacity duration-300 ${coverLoaded ? "opacity-100" : "opacity-0"}`}
+								onLoad={() => setCoverLoaded(true)}
+								loading="lazy"
+							/>
+						</>
+					) : null}
+				</div>
 
 				{/* Name + status */}
 				<div className="min-w-0 flex-1">

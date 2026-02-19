@@ -480,8 +480,12 @@ export function QueueBoard() {
 	}, [done]);
 
 	// Watcher settings handlers
+	const [savingWatcher, setSavingWatcher] = useState(false);
+	const [showWatcherSaved, setShowWatcherSaved] = useState(false);
+
 	const handleWatcherToggle = useCallback(
 		async (enabled: boolean) => {
+			setSavingWatcher(true);
 			try {
 				await fetch("/api/settings/watcher", {
 					method: "PATCH",
@@ -489,8 +493,12 @@ export function QueueBoard() {
 					body: JSON.stringify({ enabled }),
 				});
 				await refreshQueue();
+				setShowWatcherSaved(true);
+				setTimeout(() => setShowWatcherSaved(false), 1500);
 			} catch {
 				// Will sync on next poll
+			} finally {
+				setSavingWatcher(false);
 			}
 		},
 		[refreshQueue],
@@ -498,6 +506,7 @@ export function QueueBoard() {
 
 	const handleWatcherIntervalChange = useCallback(
 		async (minutes: number) => {
+			setSavingWatcher(true);
 			try {
 				await fetch("/api/settings/watcher", {
 					method: "PATCH",
@@ -505,8 +514,12 @@ export function QueueBoard() {
 					body: JSON.stringify({ intervalMinutes: minutes }),
 				});
 				await refreshQueue();
+				setShowWatcherSaved(true);
+				setTimeout(() => setShowWatcherSaved(false), 1500);
 			} catch {
 				// Will sync on next poll
+			} finally {
+				setSavingWatcher(false);
 			}
 		},
 		[refreshQueue],
@@ -641,6 +654,8 @@ export function QueueBoard() {
 						settings={watcherSettings}
 						onToggle={handleWatcherToggle}
 						onIntervalChange={handleWatcherIntervalChange}
+						saving={savingWatcher}
+						showSaved={showWatcherSaved}
 					/>
 
 					{/* Sticky action header — style picker + playlist count + collaborative filter */}
@@ -734,9 +749,14 @@ export function QueueBoard() {
 								}
 							>
 								{todo.length === 0 ? (
-									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-										No playlists pending
-									</p>
+									<div
+										className="flex items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-[var(--space-md)]"
+										style={{ minHeight: "5rem" }}
+									>
+										<p className="text-sm text-[var(--color-text-muted)]">
+											No playlists pending
+										</p>
+									</div>
 								) : (
 									todo.map((p) => (
 										<QueueCard
@@ -776,9 +796,14 @@ export function QueueBoard() {
 								}
 							>
 								{scheduled.length === 0 ? (
-									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-										Nothing scheduled
-									</p>
+									<div
+										className="flex items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-[var(--space-md)]"
+										style={{ minHeight: "5rem" }}
+									>
+										<p className="text-sm text-[var(--color-text-muted)]">
+											Nothing scheduled
+										</p>
+									</div>
 								) : (
 									scheduled.map((p) => (
 										<QueueCard
@@ -808,9 +833,14 @@ export function QueueBoard() {
 								variant="progress"
 							>
 								{inProgress.length === 0 ? (
-									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-										Nothing processing
-									</p>
+									<div
+										className="flex items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-[var(--space-md)]"
+										style={{ minHeight: "5rem" }}
+									>
+										<p className="text-sm text-[var(--color-text-muted)]">
+											Nothing processing
+										</p>
+									</div>
 								) : (
 									inProgress.map((p) => (
 										<QueueCard
@@ -867,9 +897,14 @@ export function QueueBoard() {
 								}
 							>
 								{done.length === 0 ? (
-									<p className="p-[var(--space-md)] text-center text-sm text-[var(--color-text-muted)]">
-										No completed generations
-									</p>
+									<div
+										className="flex items-center justify-center rounded-[var(--radius-md)] border border-dashed border-[var(--color-border)] p-[var(--space-md)]"
+										style={{ minHeight: "5rem" }}
+									>
+										<p className="text-sm text-[var(--color-text-muted)]">
+											No completed generations
+										</p>
+									</div>
 								) : (
 									done.map((p) => (
 										<QueueCard

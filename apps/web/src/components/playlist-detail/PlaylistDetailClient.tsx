@@ -256,7 +256,9 @@ export function PlaylistDetailClient({
 
 							<p className="text-xs text-[var(--color-text-faint)]">
 								Analyzed {formatTimestamp(analysis.created_at)} via{" "}
-								{analysis.trigger_type}
+								{{ manual: "Manual", cron: "Scheduled", auto: "Auto-detect" }[
+									analysis.trigger_type
+								] ?? analysis.trigger_type}
 							</p>
 						</div>
 					</div>
@@ -547,7 +549,11 @@ function GenerationCard({ generation }: { generation: Generation }) {
 							<span className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">
 								Trigger
 							</span>
-							<p>{generation.trigger_type}</p>
+							<p>
+								{{ manual: "Manual", cron: "Scheduled", auto: "Auto-detect" }[
+									generation.trigger_type
+								] ?? generation.trigger_type}
+							</p>
 						</div>
 						<div>
 							<span className="text-xs uppercase tracking-wide text-[var(--color-text-muted)]">

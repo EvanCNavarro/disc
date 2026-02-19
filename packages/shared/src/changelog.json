@@ -1,6 +1,62 @@
 {
 	"versions": [
 		{
+			"version": "0.15.0",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "worker",
+					"message": "Replace aHash with dHash for perceptual hashing — robust to Spotify CDN re-encoding, eliminates false-positive integrity flags"
+				},
+				{
+					"type": "fix",
+					"scope": "worker",
+					"message": "Lower phash match threshold from 25 to 10 (dHash same-image distances are 0-5)"
+				},
+				{
+					"type": "fix",
+					"scope": "worker",
+					"message": "Add cross-trigger guard preventing cron/auto-detect duplicate generation on same day"
+				},
+				{
+					"type": "ui",
+					"scope": "queue",
+					"message": "Empty queue columns now show card-height dashed placeholder instead of collapsed text"
+				},
+				{
+					"type": "ui",
+					"scope": "queue",
+					"message": "Cover art images show skeleton pulse loader with fade-in transition"
+				},
+				{
+					"type": "ui",
+					"scope": "queue",
+					"message": "Watcher toggle and interval now show Saving/Saved feedback with disabled state during save"
+				},
+				{
+					"type": "ui",
+					"scope": "dashboard",
+					"message": "Distinct trigger type icons — clock (Scheduled), cursor (Manual), radar (Auto-detect)"
+				},
+				{
+					"type": "ui",
+					"scope": "dashboard",
+					"message": "Add Auto-detect to trigger filter chips"
+				},
+				{
+					"type": "fix",
+					"scope": "dashboard",
+					"message": "Cost tooltip now uses portal to prevent table overflow on bottom rows"
+				},
+				{
+					"type": "ui",
+					"scope": "global",
+					"message": "Standardize trigger display names — Manual, Scheduled, Auto-detect — across all views"
+				}
+			]
+		},
+		{
 			"version": "0.14.1",
 			"date": "2026-02-18",
 			"entries": [
