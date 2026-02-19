@@ -36,7 +36,7 @@ Return a JSON object with these exact fields:
 Always include "no text", "no words", "no letters" in constraints.
 Return ONLY valid JSON, no markdown, no explanation.`;
 
-/** POST /api/styles/analyze — analyze reference images via Claude and create a draft style */
+/** POST /api/styles/analyze — analyze reference images via GPT-4o and create a draft style */
 export async function POST(request: Request) {
 	const session = await auth();
 	if (!session?.spotifyId) {
@@ -66,69 +66,68 @@ export async function POST(request: Request) {
 		return NextResponse.json({ error: "User not found" }, { status: 404 });
 	}
 
-	const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-	if (!ANTHROPIC_API_KEY) {
+	const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+	if (!OPENAI_API_KEY) {
 		return NextResponse.json(
-			{ error: "Missing Anthropic API key" },
+			{ error: "Missing OpenAI API key" },
 			{ status: 500 },
 		);
 	}
 
-	// Build multimodal content blocks for Claude
+	// Build multimodal content for GPT-4o vision
 	const userContent: Array<Record<string, unknown>> = [];
 
 	for (const img of images) {
 		userContent.push({
-			type: "image",
-			source: {
-				type: "base64",
-				media_type: img.type,
-				data: img.base64,
+			type: "image_url",
+			image_url: {
+				url: `data:${img.type};base64,${img.base64}`,
 			},
 		});
 	}
 
+	let textPrompt =
+		"Analyze these reference images and return the style heuristics as JSON.";
 	if (notes?.trim()) {
-		userContent.push({
-			type: "text",
-			text: `Additional context from the creator: ${notes}`,
-		});
+		textPrompt = `Additional context from the creator: ${notes}\n\n${textPrompt}`;
 	}
 
-	userContent.push({
-		type: "text",
-		text: "Analyze these reference images and return the style heuristics as JSON.",
-	});
+	userContent.push({ type: "text", text: textPrompt });
 
-	const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-		method: "POST",
-		headers: {
-			"x-api-key": ANTHROPIC_API_KEY,
-			"anthropic-version": "2023-06-01",
-			"content-type": "application/json",
+	const openaiResponse = await fetch(
+		"https://api.openai.com/v1/chat/completions",
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${OPENAI_API_KEY}`,
+				"content-type": "application/json",
+			},
+			body: JSON.stringify({
+				model: "gpt-4o",
+				max_tokens: 1024,
+				response_format: { type: "json_object" },
+				messages: [
+					{ role: "system", content: SYSTEM_PROMPT },
+					{ role: "user", content: userContent },
+				],
+			}),
 		},
-		body: JSON.stringify({
-			model: "claude-sonnet-4-5-20250929",
-			max_tokens: 1024,
-			system: SYSTEM_PROMPT,
-			messages: [{ role: "user", content: userContent }],
-		}),
-	});
+	);
 
-	if (!claudeResponse.ok) {
-		const errorText = await claudeResponse.text();
-		console.error("Claude API error:", errorText);
+	if (!openaiResponse.ok) {
+		const errorText = await openaiResponse.text();
+		console.error("OpenAI API error:", errorText);
 		return NextResponse.json(
 			{ error: "Style analysis failed" },
 			{ status: 502 },
 		);
 	}
 
-	const claudeData = (await claudeResponse.json()) as {
-		content?: Array<{ type: string; text?: string }>;
+	const openaiData = (await openaiResponse.json()) as {
+		choices?: Array<{ message?: { content?: string } }>;
 	};
-	const textBlock = claudeData.content?.find((b) => b.type === "text");
-	if (!textBlock?.text) {
+	const responseText = openaiData.choices?.[0]?.message?.content;
+	if (!responseText) {
 		return NextResponse.json(
 			{ error: "No analysis response" },
 			{ status: 502 },
@@ -137,7 +136,7 @@ export async function POST(request: Request) {
 
 	let heuristics: StyleHeuristics;
 	try {
-		heuristics = JSON.parse(textBlock.text) as StyleHeuristics;
+		heuristics = JSON.parse(responseText) as StyleHeuristics;
 	} catch {
 		return NextResponse.json(
 			{ error: "Failed to parse analysis" },
