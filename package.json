@@ -1,6 +1,6 @@
 {
 	"name": "disc",
-	"version": "0.15.1",
+	"version": "0.15.2",
 	"private": true,
 	"description": "Daily Image Spotify Covers",
 	"scripts": {

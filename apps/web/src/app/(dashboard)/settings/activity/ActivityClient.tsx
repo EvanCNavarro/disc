@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WorkerTimeline } from "@/components/settings/WorkerTimeline";
 import { getTimezoneAbbr } from "@/lib/timezone";
+import {
+	TICK_TYPE_COLORS,
+	TICK_TYPE_LABELS,
+} from "@/lib/worker-tick-constants";
 
 const POLL_INTERVAL_MS = 30_000;
 
@@ -153,22 +157,6 @@ function SummaryCards({ summary }: { summary: ActivityData["summary"] }) {
 
 // -- Ticks table --
 
-const TICK_TYPE_COLORS: Record<string, string> = {
-	watcher: "var(--color-accent)",
-	cron: "var(--color-info)",
-	heartbeat: "#8b5cf6",
-	manual: "var(--color-warning)",
-	auto: "#0d9488",
-};
-
-const TICK_TYPE_LABELS: Record<string, string> = {
-	watcher: "Watcher",
-	cron: "Cron",
-	heartbeat: "Heartbeat",
-	manual: "Manual",
-	auto: "Auto",
-};
-
 function TicksTable({
 	ticks,
 	tzLabel,
@@ -260,7 +248,10 @@ function TicksTable({
 										</span>
 									)}
 								</td>
-								<td className="max-w-[200px] truncate py-2 text-xs text-[var(--color-destructive)]">
+								<td
+									className="max-w-[200px] truncate py-2 text-xs text-[var(--color-destructive)]"
+									title={t.errorMessage ?? undefined}
+								>
 									{t.errorMessage ?? ""}
 								</td>
 							</tr>
@@ -287,6 +278,7 @@ function TicksTable({
 export function ActivityClient() {
 	const [date, setDate] = useState(todayUTC);
 	const [data, setData] = useState<ActivityData | null>(null);
+	const [error, setError] = useState<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [tzLabel, setTzLabel] = useState("Local");
 	const initialLoad = useRef(true);
@@ -304,9 +296,12 @@ export function ActivityClient() {
 		}
 		try {
 			const res = await fetch(`/api/settings/activity?date=${d}`);
-			if (res.ok) {
-				setData(await res.json());
+			if (!res.ok) {
+				setError("Failed to load activity data");
+				return;
 			}
+			setError(null);
+			setData(await res.json());
 		} finally {
 			setRefreshing(false);
 		}
@@ -384,6 +379,13 @@ export function ActivityClient() {
 					</button>
 				</div>
 			</div>
+
+			{/* Error banner */}
+			{error && (
+				<div className="rounded-[var(--radius-lg)] border border-[var(--color-destructive)] bg-[var(--color-destructive)]/10 p-[var(--space-md)] text-center text-sm text-[var(--color-destructive)]">
+					{error}
+				</div>
+			)}
 
 			{/* Timeline chart */}
 			<section className="glass rounded-[var(--radius-lg)] p-[var(--space-md)]">

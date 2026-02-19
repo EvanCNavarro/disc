@@ -152,6 +152,20 @@
 	--shadow-md: var(--shadow-md);
 	--shadow-lg: var(--shadow-lg);
 	--shadow-glow: var(--shadow-glow);
+
+	--animate-fade-out: fade-out 1.5s ease-in forwards;
+}
+
+@keyframes fade-out {
+	0% {
+		opacity: 1;
+	}
+	70% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
 }
 
 /* ============================================================

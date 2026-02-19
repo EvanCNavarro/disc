@@ -10,6 +10,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import { TICK_TYPE_LABELS } from "@/lib/worker-tick-constants";
 
 const STATUS_COLORS: Record<string, string> = {
 	success: "var(--color-accent)",
@@ -52,14 +53,6 @@ function TickMark(props: { cx?: number; cy?: number; payload?: ChartPoint }) {
 	);
 }
 
-const TYPE_LABELS: Record<string, string> = {
-	watcher: "Watcher",
-	cron: "Scheduled Cron",
-	heartbeat: "Heartbeat",
-	manual: "Manual",
-	auto: "Auto-detect",
-};
-
 function TimelineTooltip({
 	active,
 	payload,
@@ -83,7 +76,7 @@ function TimelineTooltip({
 		>
 			<p className="font-medium">{time}</p>
 			<div className="mt-1 space-y-0.5 text-[var(--color-text-muted)]">
-				<p>Type: {TYPE_LABELS[p.tickType] ?? p.tickType}</p>
+				<p>Type: {TICK_TYPE_LABELS[p.tickType] ?? p.tickType}</p>
 				{p.durationMs != null && <p>Duration: {p.durationMs}ms</p>}
 				<p>
 					Status:{" "}

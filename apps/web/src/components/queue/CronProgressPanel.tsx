@@ -50,7 +50,7 @@ function MiniCard({
 			{thumbnailUrl ? (
 				<Image
 					src={thumbnailUrl}
-					alt=""
+					alt={`Cover for ${playlist.name}`}
 					width={48}
 					height={48}
 					className="h-12 w-12 shrink-0 rounded-[var(--radius-sm)] object-cover"

@@ -43,7 +43,9 @@ export async function GET(request: Request) {
 
 	// Build timeline data
 	const timeline = ticks.map((t) => {
-		const d = new Date(t.started_at);
+		const d = new Date(
+			t.started_at.endsWith("Z") ? t.started_at : `${t.started_at}Z`,
+		);
 		return {
 			minuteOfDay: d.getUTCHours() * 60 + d.getUTCMinutes(),
 			tickType: t.tick_type,

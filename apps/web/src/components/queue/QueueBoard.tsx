@@ -64,7 +64,8 @@ function CompletionBanner({
 	const allFailed = job.completedPlaylists === 0 && job.failedPlaylists > 0;
 
 	return (
-		<output
+		<div
+			role="status"
 			className={`glass flex flex-col gap-[var(--space-md)] rounded-[var(--radius-lg)] border p-[var(--space-lg)] ${
 				allFailed
 					? "border-[var(--color-destructive)]/30"
@@ -151,7 +152,7 @@ function CompletionBanner({
 					</>
 				)}
 			</div>
-		</output>
+		</div>
 	);
 }
 
@@ -169,6 +170,7 @@ export function QueueBoard() {
 	const [generations, setGenerations] = useState<GenerationVersion[]>([]);
 	const [generationsLoading, setGenerationsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [fetchError, setFetchError] = useState<string | null>(null);
 	const [dismissedJobId, setDismissedJobId] = useState<string | null>(null);
 	const [showCollaborative, setShowCollaborative] = useState(() => {
 		if (typeof window === "undefined") return false;
@@ -195,6 +197,13 @@ export function QueueBoard() {
 				fetch("/api/auth/session"),
 			]);
 
+			if (!playlistsRes.ok && !stylesRes.ok) {
+				setFetchError("Failed to load queue data");
+				return;
+			}
+
+			setFetchError(null);
+
 			if (playlistsRes.ok) {
 				const data = (await playlistsRes.json()) as {
 					playlists: PlaylistWithImage[];
@@ -218,7 +227,7 @@ export function QueueBoard() {
 				}
 			}
 		} catch {
-			// Silently fail — will retry on next poll
+			setFetchError("Failed to load queue data");
 		} finally {
 			setLoading(false);
 		}
@@ -600,7 +609,8 @@ export function QueueBoard() {
 
 	if (loading) {
 		return (
-			<output
+			<div
+				role="status"
 				aria-label="Loading queue"
 				className="flex overflow-x-auto snap-x snap-mandatory gap-[var(--space-md)] md:grid md:grid-cols-4 md:overflow-visible md:snap-none"
 			>
@@ -616,7 +626,26 @@ export function QueueBoard() {
 						</div>
 					</div>
 				))}
-			</output>
+			</div>
+		);
+	}
+
+	if (fetchError) {
+		return (
+			<div className="flex flex-col items-center gap-[var(--space-md)] py-12 text-center">
+				<p className="text-sm text-[var(--color-destructive)]">{fetchError}</p>
+				<button
+					type="button"
+					onClick={() => {
+						setLoading(true);
+						setFetchError(null);
+						fetchData();
+					}}
+					className="rounded-[var(--radius-md)] border border-[var(--color-border)] px-4 py-2 text-sm transition-colors hover:bg-[var(--color-surface)]"
+				>
+					Retry
+				</button>
+			</div>
 		);
 	}
 

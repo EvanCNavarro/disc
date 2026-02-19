@@ -19,6 +19,7 @@ import {
 	formatTimestamp,
 	formatTrackDuration,
 } from "@/lib/format";
+import { TRIGGER_LABELS } from "@/lib/pipeline-constants";
 
 interface Analysis {
 	id: string;
@@ -256,9 +257,7 @@ export function PlaylistDetailClient({
 
 							<p className="text-xs text-[var(--color-text-faint)]">
 								Analyzed {formatTimestamp(analysis.created_at)} via{" "}
-								{{ manual: "Manual", cron: "Scheduled", auto: "Auto-detect" }[
-									analysis.trigger_type
-								] ?? analysis.trigger_type}
+								{TRIGGER_LABELS[analysis.trigger_type] ?? analysis.trigger_type}
 							</p>
 						</div>
 					</div>
@@ -331,7 +330,7 @@ export function PlaylistDetailClient({
 																// biome-ignore lint/performance/noImgElement: external Spotify CDN URL
 																<img
 																	src={snap.albumImageUrl}
-																	alt=""
+																	alt={`Album art for ${te.trackName}`}
 																	className="w-8 h-8 shrink-0 rounded-[var(--radius-sm)] object-cover"
 																	loading="lazy"
 																/>
@@ -469,7 +468,7 @@ function GenerationCard({ generation }: { generation: Generation }) {
 						// biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image
 						<img
 							src={`/api/images?key=${encodeURIComponent(generation.r2_key)}`}
-							alt=""
+							alt={`Cover: ${generation.symbolic_object}`}
 							className="w-full h-full object-cover"
 							loading="lazy"
 						/>
@@ -550,9 +549,8 @@ function GenerationCard({ generation }: { generation: Generation }) {
 								Trigger
 							</span>
 							<p>
-								{{ manual: "Manual", cron: "Scheduled", auto: "Auto-detect" }[
-									generation.trigger_type
-								] ?? generation.trigger_type}
+								{TRIGGER_LABELS[generation.trigger_type] ??
+									generation.trigger_type}
 							</p>
 						</div>
 						<div>

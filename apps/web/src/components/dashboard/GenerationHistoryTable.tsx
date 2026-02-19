@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useQueue } from "@/context/QueueContext";
 import { useCachedFetch } from "@/hooks/useCachedFetch";
 import { formatCost, formatDuration, formatTimestamp } from "@/lib/format";
+import { COST_STEP_LABELS, TRIGGER_LABELS } from "@/lib/pipeline-constants";
 
 interface CostStep {
 	step: string;
@@ -53,18 +54,6 @@ const STATUS_OPTIONS: StatusFilter[] = [
 ];
 const TRIGGER_OPTIONS: TriggerFilter[] = ["all", "manual", "auto", "cron"];
 const PAGE_SIZE = 20;
-
-const TRIGGER_LABELS: Record<string, string> = {
-	manual: "Manual",
-	cron: "Scheduled",
-	auto: "Auto-detect",
-};
-
-const STEP_LABELS: Record<string, string> = {
-	extract_themes: "Extract Themes",
-	convergence: "Convergence",
-	image_generation: "Image Gen",
-};
 
 function formatTokens(n: number): string {
 	return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
@@ -294,6 +283,8 @@ function TriggerIcon({ type }: { type: string }) {
 				viewBox="0 0 24 24"
 				stroke="currentColor"
 				strokeWidth={2}
+				strokeLinecap="round"
+				strokeLinejoin="round"
 				aria-hidden="true"
 			>
 				<circle cx="12" cy="12" r="10" />
@@ -310,6 +301,7 @@ function TriggerIcon({ type }: { type: string }) {
 				stroke="currentColor"
 				strokeWidth={2}
 				strokeLinecap="round"
+				strokeLinejoin="round"
 				aria-hidden="true"
 			>
 				<path d="M2 12C2 6.5 6.5 2 12 2" />
@@ -327,6 +319,8 @@ function TriggerIcon({ type }: { type: string }) {
 			viewBox="0 0 24 24"
 			stroke="currentColor"
 			strokeWidth={2}
+			strokeLinecap="round"
+			strokeLinejoin="round"
 			aria-hidden="true"
 		>
 			<path d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5" />
@@ -349,7 +343,7 @@ function CostTooltipContent({ breakdown }: { breakdown: CostBreakdown }) {
 					<tr key={s.step}>
 						<td className="py-1.5 pr-3">
 							<span className="font-medium">
-								{STEP_LABELS[s.step] ?? s.step}
+								{COST_STEP_LABELS[s.step] ?? s.step}
 							</span>
 							{s.input_tokens != null && s.output_tokens != null && (
 								<div className="text-[var(--color-text-faint)] mt-0.5">
@@ -513,7 +507,7 @@ function ExpandedDetails({ row }: { row: GenerationRow }) {
 						{breakdown.steps.map((s) => (
 							<div key={s.step} className="contents">
 								<span className="font-medium">
-									{STEP_LABELS[s.step] ?? s.step}
+									{COST_STEP_LABELS[s.step] ?? s.step}
 								</span>
 								<span className="text-[var(--color-text-muted)]">
 									{shortenModel(s.model)}
@@ -534,9 +528,11 @@ function ExpandedDetails({ row }: { row: GenerationRow }) {
 
 function CoverThumb({
 	r2Key,
+	playlistName,
 	size = 8,
 }: {
 	r2Key: string | null;
+	playlistName?: string;
 	size?: number;
 }) {
 	const [loaded, setLoaded] = useState(false);
@@ -554,7 +550,7 @@ function CoverThumb({
 					{/* biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image */}
 					<img
 						src={`/api/images?key=${encodeURIComponent(r2Key)}`}
-						alt=""
+						alt={playlistName ? `Cover for ${playlistName}` : ""}
 						className={`h-full w-full object-cover transition-opacity duration-300 ${loaded ? "opacity-100" : "opacity-0"}`}
 						onLoad={() => setLoaded(true)}
 						loading="lazy"
@@ -592,7 +588,7 @@ function DesktopRow({
 				className="cursor-pointer transition-colors hover:bg-[var(--color-surface-hover)]"
 			>
 				<td className="py-2.5 pr-2 w-10">
-					<CoverThumb r2Key={row.r2_key} />
+					<CoverThumb r2Key={row.r2_key} playlistName={row.playlist_name} />
 				</td>
 				<td className="py-2.5 pr-3 max-w-[12rem] truncate">
 					{row.playlist_name}
@@ -649,7 +645,7 @@ function MobileRow({
 				className="flex w-full items-center justify-between py-3 text-left"
 			>
 				<div className="flex items-center gap-2.5 min-w-0">
-					<CoverThumb r2Key={row.r2_key} />
+					<CoverThumb r2Key={row.r2_key} playlistName={row.playlist_name} />
 					<div className="flex flex-col gap-0.5 min-w-0">
 						<span className="text-sm font-medium truncate">
 							{row.playlist_name}

@@ -5,6 +5,10 @@ import { APLOTOCA } from "@disc/shared";
 import { useState } from "react";
 import { Dropdown, type DropdownOption } from "@/components/Dropdown";
 import { formatRelative } from "@/lib/format";
+import {
+	PIPELINE_STEP_LABELS,
+	PIPELINE_STEP_ORDER,
+} from "@/lib/pipeline-constants";
 
 const ANALYSIS_MODE_OPTIONS: DropdownOption[] = [
 	{
@@ -23,24 +27,6 @@ export interface ScheduleConfig {
 	analysisMode: "with" | "without";
 	customText: string;
 }
-
-const STEP_LABELS: Record<PipelineStepName, string> = {
-	fetch_tracks: "Fetching tracks",
-	fetch_lyrics: "Fetching lyrics",
-	extract_themes: "Extracting themes",
-	select_theme: "Selecting theme",
-	generate_image: "Generating image",
-	upload: "Uploading to Spotify",
-};
-
-const STEP_ORDER: PipelineStepName[] = [
-	"fetch_tracks",
-	"fetch_lyrics",
-	"extract_themes",
-	"select_theme",
-	"generate_image",
-	"upload",
-];
 
 interface QueueCardProps {
 	id: string;
@@ -102,9 +88,11 @@ export function QueueCard({
 		}
 	}
 
-	const stepIndex = progress ? STEP_ORDER.indexOf(progress.currentStep) : -1;
+	const stepIndex = progress
+		? PIPELINE_STEP_ORDER.indexOf(progress.currentStep)
+		: -1;
 	const stepPercent =
-		stepIndex >= 0 ? ((stepIndex + 1) / STEP_ORDER.length) * 100 : 0;
+		stepIndex >= 0 ? ((stepIndex + 1) / PIPELINE_STEP_ORDER.length) * 100 : 0;
 
 	const isSelectable =
 		!locked &&
@@ -243,7 +231,8 @@ export function QueueCard({
 						</svg>
 					</span>
 				) : status === "processing" ? (
-					<output
+					<span
+						role="status"
 						className="h-6 w-6 shrink-0 animate-spin rounded-full border-2 border-[var(--color-info)] border-t-transparent"
 						aria-label="Processing"
 					/>
@@ -259,7 +248,7 @@ export function QueueCard({
 							{/* biome-ignore lint/performance/noImgElement: auth proxy incompatible with next/image */}
 							<img
 								src={coverUrl}
-								alt=""
+								alt={`Cover for ${name}`}
 								className={`h-full w-full object-cover transition-opacity duration-300 ${coverLoaded ? "opacity-100" : "opacity-0"}`}
 								onLoad={() => setCoverLoaded(true)}
 								loading="lazy"
@@ -282,7 +271,8 @@ export function QueueCard({
 					) : status === "processing" && progress ? (
 						<p className="text-sm text-[var(--color-info)]">
 							Step {stepIndex + 1}/6:{" "}
-							{STEP_LABELS[progress.currentStep] ?? progress.currentStep}
+							{PIPELINE_STEP_LABELS[progress.currentStep] ??
+								progress.currentStep}
 						</p>
 					) : status === "failed" ? (
 						<p

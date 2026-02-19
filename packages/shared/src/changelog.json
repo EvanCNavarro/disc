@@ -1,6 +1,47 @@
 {
 	"versions": [
 		{
+			"version": "0.15.2",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Fix timeline timezone parsing — append Z suffix to D1 UTC timestamps to prevent double-shift"
+				},
+				{
+					"type": "refactor",
+					"scope": "web",
+					"message": "Unify tick type, step, and trigger labels into shared constants — eliminate duplicated definitions"
+				},
+				{
+					"type": "fix",
+					"scope": "web",
+					"message": "Add error states to activity page and queue board initial load with retry button"
+				},
+				{
+					"type": "fix",
+					"scope": "web",
+					"message": "Fix semantic HTML — replace misused output tags with div/span role=status"
+				},
+				{
+					"type": "fix",
+					"scope": "web",
+					"message": "Add meaningful alt text to cover images, error tooltip to activity tick table"
+				},
+				{
+					"type": "fix",
+					"scope": "web",
+					"message": "Add missing animate-fade-out keyframe for watcher saved confirmation"
+				},
+				{
+					"type": "fix",
+					"scope": "web",
+					"message": "Consistent strokeLinecap/strokeLinejoin on all trigger icon SVGs"
+				}
+			]
+		},
+		{
 			"version": "0.15.1",
 			"date": "2026-02-18",
 			"entries": [
