@@ -20,27 +20,27 @@
 					"message": "Add cross-trigger guard preventing cron/auto-detect duplicate generation on same day"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "queue",
 					"message": "Empty queue columns now show card-height dashed placeholder instead of collapsed text"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "queue",
 					"message": "Cover art images show skeleton pulse loader with fade-in transition"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "queue",
 					"message": "Watcher toggle and interval now show Saving/Saved feedback with disabled state during save"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "dashboard",
 					"message": "Distinct trigger type icons — clock (Scheduled), cursor (Manual), radar (Auto-detect)"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "dashboard",
 					"message": "Add Auto-detect to trigger filter chips"
 				},
@@ -50,7 +50,7 @@
 					"message": "Cost tooltip now uses portal to prevent table overflow on bottom rows"
 				},
 				{
-					"type": "ui",
+					"type": "feat",
 					"scope": "global",
 					"message": "Standardize trigger display names — Manual, Scheduled, Auto-detect — across all views"
 				}
@@ -76,7 +76,7 @@
 					"message": "Backfill /hash endpoint now compresses to JPEG before hashing, consistent with pipeline"
 				},
 				{
-					"type": "test",
+					"type": "chore",
 					"scope": "worker",
 					"message": "Add hammingDistance unit tests (identical, single-bit, opposite, multi-bit)"
 				}
