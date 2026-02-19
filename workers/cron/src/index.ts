@@ -30,7 +30,12 @@
 // and stores it in D1 -> next worker tick picks it up automatically.
 
 import type { DbStyle } from "@disc/shared";
-import { computeAverageHash } from "./image";
+import {
+	compressForSpotify,
+	computeAverageHash,
+	hammingDistance,
+	PHASH_MATCH_THRESHOLD,
+} from "./image";
 import { generateForPlaylist, type PipelineEnv } from "./pipeline";
 import { fetchUserPlaylists, refreshAccessToken } from "./spotify";
 import { insertWorkerTick, pruneOldTicks } from "./ticks";
@@ -317,7 +322,12 @@ export default {
 
 			try {
 				const imageBytes = new Uint8Array(await request.arrayBuffer());
-				const phash = computeAverageHash(imageBytes);
+				// Compress to JPEG first (same as pipeline) so phash matches what Spotify receives
+				const base64Jpeg = await compressForSpotify(imageBytes);
+				const jpegBytes = Uint8Array.from(atob(base64Jpeg), (c) =>
+					c.charCodeAt(0),
+				);
+				const phash = computeAverageHash(jpegBytes);
 				return Response.json({ phash });
 			} catch (err) {
 				return Response.json(
@@ -1011,17 +1021,20 @@ async function watchUser(
 		if (sp.imageUrl && sp.imageUrl !== existing.last_seen_cover_url) {
 			if (gen.cover_phash && sp.imageUrl) {
 				const livePhash = await fetchSpotifyCoverPhash(sp.imageUrl);
-				if (livePhash && livePhash !== gen.cover_phash) {
-					console.log(
-						`[Integrity] "${sp.name}" — cover replaced (phash mismatch), resetting`,
-					);
-					await resetCoverForPlaylist(env.DB, existing.id, gen.id);
-					integrityFlagged++;
-					continue;
+				if (livePhash) {
+					const distance = hammingDistance(livePhash, gen.cover_phash);
+					if (distance > PHASH_MATCH_THRESHOLD) {
+						console.log(
+							`[Integrity] "${sp.name}" — cover replaced (hamming distance ${distance}/${PHASH_MATCH_THRESHOLD}), resetting`,
+						);
+						await resetCoverForPlaylist(env.DB, existing.id, gen.id);
+						integrityFlagged++;
+						continue;
+					}
 				}
 			}
 
-			// Phash matches or no phash yet — update stored URL
+			// Phash matches or within threshold — update stored URL
 			await env.DB.prepare(
 				`UPDATE playlists SET last_seen_cover_url = ?, cover_verified_at = datetime('now') WHERE id = ?`,
 			)

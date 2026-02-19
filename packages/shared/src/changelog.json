@@ -1,6 +1,32 @@
 {
 	"versions": [
 		{
+			"version": "0.14.1",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "worker",
+					"message": "Hash compressed JPEG instead of raw Replicate output — phash now matches what Spotify actually stores, eliminating false positives"
+				},
+				{
+					"type": "fix",
+					"scope": "worker",
+					"message": "Use Hamming distance (threshold 12) instead of exact phash match — tolerates Spotify re-encoding without false flags"
+				},
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Backfill /hash endpoint now compresses to JPEG before hashing, consistent with pipeline"
+				},
+				{
+					"type": "test",
+					"scope": "worker",
+					"message": "Add hammingDistance unit tests (identical, single-bit, opposite, multi-bit)"
+				}
+			]
+		},
+		{
 			"version": "0.14.0",
 			"date": "2026-02-18",
 			"entries": [

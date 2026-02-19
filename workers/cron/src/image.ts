@@ -102,6 +102,27 @@ export function computeAverageHash(imageBytes: Uint8Array): string {
 	return hash.toString(16).padStart(16, "0");
 }
 
+/**
+ * Computes the Hamming distance between two 16-char hex phash strings.
+ * Returns the number of differing bits (0 = identical, 64 = completely different).
+ * Same image at different compressions: typically 0-10.
+ * Completely different image: typically 25-40.
+ */
+export function hammingDistance(hash1: string, hash2: string): number {
+	const a = BigInt(`0x${hash1}`);
+	const b = BigInt(`0x${hash2}`);
+	let xor = a ^ b;
+	let count = 0;
+	while (xor > 0n) {
+		count += Number(xor & 1n);
+		xor >>= 1n;
+	}
+	return count;
+}
+
+/** Maximum Hamming distance to consider two hashes as the "same" image */
+export const PHASH_MATCH_THRESHOLD = 12;
+
 function uint8ArrayToBase64(bytes: Uint8Array): string {
 	let binary = "";
 	for (let i = 0; i < bytes.length; i++) {

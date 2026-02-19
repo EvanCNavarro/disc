@@ -517,7 +517,9 @@ export async function generateForPlaylist(
 		});
 		await tracker.advance("upload");
 		const base64Jpeg = await compressForSpotify(imageBytes);
-		const coverPhash = computeAverageHash(imageBytes);
+		// Hash the compressed JPEG (what Spotify actually receives), not the raw Replicate output
+		const jpegBytes = Uint8Array.from(atob(base64Jpeg), (c) => c.charCodeAt(0));
+		const coverPhash = computeAverageHash(jpegBytes);
 		await uploadPlaylistCover(
 			playlist.spotify_playlist_id,
 			base64Jpeg,
