@@ -120,8 +120,13 @@ export function hammingDistance(hash1: string, hash2: string): number {
 	return count;
 }
 
-/** Maximum Hamming distance to consider two hashes as the "same" image */
-export const PHASH_MATCH_THRESHOLD = 12;
+/**
+ * Maximum Hamming distance to consider two hashes as the "same" image.
+ * Same image at different JPEG compressions: typically 0-10.
+ * Same image after Spotify CDN re-encoding: typically 10-20.
+ * Completely different image: typically 25-40.
+ */
+export const PHASH_MATCH_THRESHOLD = 25;
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {
 	let binary = "";

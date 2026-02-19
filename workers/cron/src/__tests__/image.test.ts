@@ -72,7 +72,7 @@ describe("hammingDistance", () => {
 });
 
 describe("PHASH_MATCH_THRESHOLD", () => {
-	it("is set to 12", () => {
-		expect(PHASH_MATCH_THRESHOLD).toBe(12);
+	it("is set to 25", () => {
+		expect(PHASH_MATCH_THRESHOLD).toBe(25);
 	});
 });

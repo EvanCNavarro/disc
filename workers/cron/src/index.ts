@@ -1023,10 +1023,11 @@ async function watchUser(
 				const livePhash = await fetchSpotifyCoverPhash(sp.imageUrl);
 				if (livePhash) {
 					const distance = hammingDistance(livePhash, gen.cover_phash);
+					console.log(
+						`[Integrity] "${sp.name}" — URL changed, hamming distance: ${distance}/${PHASH_MATCH_THRESHOLD} (stored: ${gen.cover_phash}, live: ${livePhash})`,
+					);
 					if (distance > PHASH_MATCH_THRESHOLD) {
-						console.log(
-							`[Integrity] "${sp.name}" — cover replaced (hamming distance ${distance}/${PHASH_MATCH_THRESHOLD}), resetting`,
-						);
+						console.log(`[Integrity] "${sp.name}" — cover replaced, resetting`);
 						await resetCoverForPlaylist(env.DB, existing.id, gen.id);
 						integrityFlagged++;
 						continue;
