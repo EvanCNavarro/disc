@@ -38,6 +38,11 @@
 					"type": "fix",
 					"scope": "web",
 					"message": "Consistent strokeLinecap/strokeLinejoin on all trigger icon SVGs"
+				},
+				{
+					"type": "fix",
+					"scope": "styles",
+					"message": "Style creator: image counter, placeholder slots, client-side resize before upload to avoid body size limits"
 				}
 			]
 		},
