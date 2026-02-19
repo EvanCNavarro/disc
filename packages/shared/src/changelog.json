@@ -1,6 +1,22 @@
 {
 	"versions": [
 		{
+			"version": "0.15.1",
+			"date": "2026-02-18",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Switch style analysis from Anthropic to OpenAI GPT-4o vision — uses existing configured key"
+				},
+				{
+					"type": "fix",
+					"scope": "changelog",
+					"message": "Fix changelog crash from invalid entry types (ui, test) not in ChangelogEntryType union"
+				}
+			]
+		},
+		{
 			"version": "0.15.0",
 			"date": "2026-02-18",
 			"entries": [
