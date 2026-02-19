@@ -1,6 +1,17 @@
 {
 	"versions": [
 		{
+			"version": "0.15.3",
+			"date": "2026-02-19",
+			"entries": [
+				{
+					"type": "docs",
+					"scope": "changelog",
+					"message": "Add missing style creator improvements to v0.15.2 changelog entry"
+				}
+			]
+		},
+		{
 			"version": "0.15.2",
 			"date": "2026-02-18",
 			"entries": [
