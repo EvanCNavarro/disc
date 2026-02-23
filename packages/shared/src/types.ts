@@ -412,13 +412,19 @@ export type GenerationStatus =
 	| "pending"
 	| "processing"
 	| "completed"
-	| "failed";
+	| "failed"
+	| "cancelled";
 
 export type GenerationTrigger = "manual" | "cron" | "auto";
 
 export type JobType = "manual" | "cron" | "bulk" | "auto";
 
-export type JobStatus = "pending" | "processing" | "completed" | "failed";
+export type JobStatus =
+	| "pending"
+	| "processing"
+	| "completed"
+	| "failed"
+	| "cancelled";
 
 // ──────────────────────────────────────────────
 // Config
