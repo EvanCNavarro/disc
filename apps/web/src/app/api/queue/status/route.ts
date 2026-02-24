@@ -117,7 +117,7 @@ export const GET = apiRoute(async function GET() {
 	if (activeJobs.length > 0) {
 		const job = activeJobs[0];
 
-		// Get playlists involved in this job (recently updated)
+		// Get playlists associated with this job via job_id FK
 		const playlists = await queryD1<PlaylistRow>(
 			`SELECT p.id, p.name, p.spotify_playlist_id, p.status, p.progress_data,
 				(SELECT g.r2_key FROM generations g WHERE g.playlist_id = p.id AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as r2_key,
@@ -125,8 +125,7 @@ export const GET = apiRoute(async function GET() {
 				(SELECT g.cost_usd FROM generations g WHERE g.playlist_id = p.id AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as cost_usd,
 				(SELECT g.error_message FROM generations g WHERE g.playlist_id = p.id AND g.status = 'failed' AND g.deleted_at IS NULL ORDER BY g.created_at DESC LIMIT 1) as error_message
 			FROM playlists p
-			WHERE p.user_id = ? AND p.deleted_at IS NULL AND p.status IN ('queued', 'processing', 'generated', 'failed')
-				AND p.updated_at > datetime('now', '-2 hours')
+			WHERE p.job_id = ? AND p.deleted_at IS NULL AND p.status IN ('queued', 'processing', 'generated', 'failed')
 			ORDER BY
 				CASE p.status
 					WHEN 'processing' THEN 0
@@ -134,7 +133,7 @@ export const GET = apiRoute(async function GET() {
 					WHEN 'generated' THEN 2
 					WHEN 'failed' THEN 3
 				END`,
-			[user.id],
+			[job.id],
 		);
 
 		let totalCost = 0;

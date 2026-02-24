@@ -29,7 +29,7 @@ async function getSettingsData(spotifyId: string) {
 	if (!user) return null;
 
 	const styles = await queryD1<StyleOption>(
-		"SELECT id, name FROM styles WHERE user_id = ? OR is_default = 1 ORDER BY is_default DESC, name ASC",
+		"SELECT id, name FROM styles WHERE (user_id = ? OR is_default = 1) AND (status = 'active' OR status IS NULL) ORDER BY is_default DESC, name ASC",
 		[user.id],
 	);
 

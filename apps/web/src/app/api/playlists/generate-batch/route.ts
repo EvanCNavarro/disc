@@ -124,6 +124,12 @@ export const POST = apiRoute(async function POST(request) {
 			[jobId, userId, eligibleConfigs.length],
 		);
 
+		// Associate playlists with this job
+		await queryD1(
+			`UPDATE playlists SET job_id = ? WHERE id IN (${eligibleConfigs.map(() => "?").join(",")}) AND user_id = ?`,
+			[jobId, ...eligibleConfigs.map((c) => c.playlistId), userId],
+		);
+
 		// Dispatch per-playlist to worker. Each playlist may have different
 		// light_extraction_text, so we make individual calls. The worker marks
 		// playlists as "queued" immediately in setupTrigger, so timeout is a
@@ -169,10 +175,19 @@ export const POST = apiRoute(async function POST(request) {
 			}
 		}
 
-		await queryD1(
-			`UPDATE jobs SET status = 'completed', completed_playlists = ?, failed_playlists = ?, completed_at = datetime('now') WHERE id = ?`,
-			[succeeded, failed, jobId],
-		);
+		// Update job with actual dispatch counts (total_playlists reflects what actually dispatched)
+		await queryD1(`UPDATE jobs SET total_playlists = ? WHERE id = ?`, [
+			succeeded,
+			jobId,
+		]);
+
+		// If all dispatches failed, mark job as failed immediately
+		if (succeeded === 0) {
+			await queryD1(
+				`UPDATE jobs SET status = 'failed', failed_playlists = ?, completed_at = datetime('now') WHERE id = ?`,
+				[failed, jobId],
+			);
+		}
 
 		return NextResponse.json({
 			total: configs.length,

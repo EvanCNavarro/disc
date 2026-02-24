@@ -11,6 +11,7 @@ interface StyleGridProps {
 		status: string;
 		is_default: number;
 		thumbnail_url: string | null;
+		version: string;
 	}>;
 }
 

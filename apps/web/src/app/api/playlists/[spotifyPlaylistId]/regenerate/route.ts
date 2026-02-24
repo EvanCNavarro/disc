@@ -91,6 +91,12 @@ export const POST = apiRoute(async function POST(
 		[jobId, userId],
 	);
 
+	// Associate playlist with this job
+	await queryD1(`UPDATE playlists SET job_id = ? WHERE id = ?`, [
+		jobId,
+		playlist.id,
+	]);
+
 	// Worker now runs pipeline synchronously — use a 15s timeout since
 	// setupTrigger marks the playlist as "processing" almost immediately.
 	// If the worker is still running the pipeline, the timeout is fine.
@@ -123,11 +129,6 @@ export const POST = apiRoute(async function POST(
 				{ status: 502 },
 			);
 		}
-
-		await queryD1(
-			`UPDATE jobs SET status = 'completed', completed_playlists = 1, completed_at = datetime('now') WHERE id = ?`,
-			[jobId],
-		);
 
 		const result = await response.json();
 		return NextResponse.json({

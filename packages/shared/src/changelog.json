@@ -1,6 +1,48 @@
 {
 	"versions": [
 		{
+			"version": "0.16.2",
+			"date": "2026-02-23",
+			"entries": [
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "Version label and hover-delete button on style cards — delete user-created styles without entering the editor"
+				},
+				{
+					"type": "feat",
+					"scope": "styles",
+					"message": "StatusBadge supports active/draft/archived color mappings"
+				},
+				{
+					"type": "fix",
+					"scope": "settings",
+					"message": "Style picker excludes drafts — only active styles shown"
+				}
+			]
+		},
+		{
+			"version": "0.16.1",
+			"date": "2026-02-23",
+			"entries": [
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Job-playlist counting uses job_id FK instead of 2-hour time-window heuristic"
+				},
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Batch jobs stay 'processing' until playlists actually complete (no premature completion)"
+				},
+				{
+					"type": "fix",
+					"scope": "api",
+					"message": "Cancel scoped to active job only — no longer cancels unrelated playlists"
+				}
+			]
+		},
+		{
 			"version": "0.16.0",
 			"date": "2026-02-19",
 			"entries": [

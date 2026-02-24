@@ -546,6 +546,13 @@ async function processUser(
 			`[Cron] Found ${playlists.length} playlist(s) needing regeneration for user ${user.id} (style: ${style.id})`,
 		);
 
+		// Associate playlists with this job
+		for (const playlist of playlists) {
+			await env.DB.prepare("UPDATE playlists SET job_id = ? WHERE id = ?")
+				.bind(jobId, playlist.id)
+				.run();
+		}
+
 		let completed = 0;
 		let failed = 0;
 
@@ -1110,11 +1117,11 @@ async function triggerAutoGeneration(
 		.bind(jobId, user.id)
 		.run();
 
-	// Mark playlist as triggered
+	// Associate playlist with this job and mark as triggered
 	await env.DB.prepare(
-		`UPDATE playlists SET auto_detect_status = 'triggered', status = 'queued' WHERE id = ?`,
+		`UPDATE playlists SET auto_detect_status = 'triggered', status = 'queued', job_id = ? WHERE id = ?`,
 	)
-		.bind(playlist.id)
+		.bind(jobId, playlist.id)
 		.run();
 
 	const styleId = user.style_preference || "bleached-crosshatch";

@@ -23,30 +23,42 @@ export const POST = apiRoute(async function POST() {
 	}
 	const userId = users[0].id;
 
-	// Cancel all queued and processing playlists
-	await queryD1(
-		`UPDATE playlists
-		 SET status = 'idle', progress_data = NULL, updated_at = datetime('now')
-		 WHERE user_id = ? AND status IN ('queued', 'processing') AND deleted_at IS NULL`,
+	// Find the active job
+	const activeJobs = await queryD1<{ id: string }>(
+		"SELECT id FROM jobs WHERE user_id = ? AND status = 'processing' ORDER BY started_at DESC LIMIT 1",
 		[userId],
 	);
 
-	// Mark pending/processing generations as cancelled
+	if (activeJobs.length === 0) {
+		return NextResponse.json(
+			{ error: "No active job to cancel" },
+			{ status: 404 },
+		);
+	}
+	const jobId = activeJobs[0].id;
+
+	// Cancel only this job's playlists
+	await queryD1(
+		`UPDATE playlists
+		 SET status = 'idle', progress_data = NULL, updated_at = datetime('now')
+		 WHERE job_id = ? AND status IN ('queued', 'processing') AND deleted_at IS NULL`,
+		[jobId],
+	);
+
+	// Mark this job's pending/processing generations as cancelled
 	await queryD1(
 		`UPDATE generations
 		 SET status = 'cancelled'
 		 WHERE playlist_id IN (
-			SELECT id FROM playlists WHERE user_id = ? AND deleted_at IS NULL
+			SELECT id FROM playlists WHERE job_id = ? AND deleted_at IS NULL
 		 ) AND status IN ('pending', 'processing')`,
-		[userId],
+		[jobId],
 	);
 
-	// Mark active job as cancelled
+	// Mark this specific job as cancelled
 	await queryD1(
-		`UPDATE jobs
-		 SET status = 'cancelled', completed_at = datetime('now')
-		 WHERE user_id = ? AND status = 'processing'`,
-		[userId],
+		`UPDATE jobs SET status = 'cancelled', completed_at = datetime('now') WHERE id = ?`,
+		[jobId],
 	);
 
 	return NextResponse.json({ success: true });

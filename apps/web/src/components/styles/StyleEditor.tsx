@@ -7,7 +7,7 @@ import {
 	reconstructPrompt,
 } from "@disc/shared";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/toast";
@@ -69,11 +69,25 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 				body: JSON.stringify({ prompt: promptTemplate, subjects }),
 			});
 
-			if (!response.ok) throw new Error("Generation failed");
+			if (!response.ok) {
+				const errBody = await response.text().catch(() => "no body");
+				console.error(
+					"[StyleEditor] generate failed:",
+					response.status,
+					errBody,
+				);
+				throw new Error(`Generation failed (${response.status}): ${errBody}`);
+			}
 
 			const data = (await response.json()) as {
-				images: Array<{ subject: string; url: string | null }>;
+				images: Array<{ subject: string; url: string | null; error?: string }>;
 			};
+
+			// Log any per-image failures
+			for (const img of data.images) {
+				if (!img.url)
+					console.error("[StyleEditor] image failed:", img.subject, img.error);
+			}
 
 			setPreviewImages(
 				data.images.map((img) => ({
@@ -86,12 +100,19 @@ export function StyleEditor({ style }: { style: DbStyle }) {
 			setPreviewImages((prev) =>
 				prev.map((img) => ({ ...img, loading: false })),
 			);
-			addToast("Failed to generate preview", "error");
-			console.error("Generation failed:", error);
+			const msg = error instanceof Error ? error.message : "Unknown error";
+			addToast(`Preview failed: ${msg}`, "error");
+			console.error("[StyleEditor] generation error:", error);
 		} finally {
 			setStatus("idle");
 		}
 	}, [heuristics, subjects, style.id, addToast]);
+
+	// Auto-generate previews on mount
+	// biome-ignore lint/correctness/useExhaustiveDependencies: intentional — fire once on mount, handleRegenerate is stable via useCallback
+	useEffect(() => {
+		handleRegenerate();
+	}, []);
 
 	// New Subjects -- picks 4 new random objects and clears images
 	const handleNewSubjects = useCallback(() => {

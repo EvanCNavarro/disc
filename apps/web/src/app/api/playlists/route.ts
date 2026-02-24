@@ -33,7 +33,7 @@ export const GET = apiRoute(async function GET() {
 	// Handles both new format ($.startedAt) and old format ($.started_at)
 	await queryD1(
 		`UPDATE playlists
-		 SET status = 'idle', progress_data = NULL
+		 SET status = 'idle', progress_data = NULL, job_id = NULL
 		 WHERE user_id = ? AND status = 'processing'
 		   AND progress_data IS NOT NULL
 		   AND replace(replace(substr(
@@ -45,7 +45,7 @@ export const GET = apiRoute(async function GET() {
 	// Reset stale queued playlists (stuck > 15 minutes — worker likely crashed)
 	await queryD1(
 		`UPDATE playlists
-		 SET status = 'idle', progress_data = NULL
+		 SET status = 'idle', progress_data = NULL, job_id = NULL
 		 WHERE user_id = ? AND status = 'queued'
 		   AND progress_data IS NOT NULL
 		   AND replace(replace(substr(
